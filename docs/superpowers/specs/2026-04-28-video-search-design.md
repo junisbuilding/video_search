@@ -21,7 +21,14 @@ thumbnails + captions). Distributed as a Docker image.
 
 ## Constraints
 
-- Must run on a single machine with one NVIDIA GPU (target: ≤12 GB VRAM)
+- App container targets a machine with one NVIDIA GPU. The local GPU only
+  runs SigLIP 2 (frame embedding) and the text embedder — together ~2 GB
+  VRAM at default model sizes, comfortable on a 4 GB GPU.
+- The VLM (caption generator) runs as a separate service, reached over HTTP
+  at any URL configured by the user — the same host, a separate LAN box, a
+  Tailscale node, anywhere routable. The app does not assume the VLM runs
+  locally and does not manage its lifecycle. Default model `qwen2.5-vl-3b`
+  fits in ≤12 GB VRAM on whichever host serves it.
 - Single-user, local network use
 - Library is read-only from the app's perspective; the app never writes inside
   user video folders
@@ -39,9 +46,12 @@ Single Docker image, started via `docker compose up`. Inside the container:
 3. **Indexer worker** — separate process in the same image. Pulls jobs from a
    SQLite-backed queue, runs the ingestion pipeline. Single worker process; GPU
    concurrency comes from batching, not parallelism.
-4. **External services** —
-   - **llama-server** (sidecar in compose, or host-run during dev) hosts the
-     vision-language model used for caption generation.
+4. **External VLM service** — any OpenAI-compatible chat-completions endpoint
+   that supports vision input (llama-server, vLLM, Ollama, a hosted endpoint,
+   etc.). Reached over HTTP at `VS_VLM_ENDPOINT`. Could be the same host, a
+   separate machine on the LAN, a Tailscale node, or any routable URL. The app
+   does not start, supervise, or co-locate this service. Users without one can
+   optionally run llama-server as a compose sidecar (example below).
 
 Storage:
 
@@ -59,10 +69,10 @@ state), so splitting later is straightforward.
             ┌─────────────────────────────────────┐
             │  Docker container: video-search     │
             │  ┌──────────┐    ┌──────────────┐  │
-host vols → │  │FastAPI + │←→  │ Indexer      │  │
-~/Videos    │  │Watcher   │ q  │ worker proc  │──┼──→ llama-server (VLM)
-./data      │  └────┬─────┘    └──────┬───────┘  │     (sidecar or host)
-./models    │       │                 │          │
+host vols → │  │FastAPI + │←→  │ Indexer      │  │     VLM endpoint
+~/Videos    │  │Watcher   │ q  │ worker proc  │──┼──→  (any reachable URL:
+./data      │  └────┬─────┘    └──────┬───────┘  │      same host, LAN box,
+./models    │       │                 │          │      Tailscale, etc.)
             │     LanceDB ←───────────┘          │
             │     thumbnails/                    │
             │     jobs.db                        │
@@ -76,11 +86,13 @@ host vols → │  │FastAPI + │←→  │ Indexer      │  │
 | Role                  | Default                                      | Notes                                                                |
 |-----------------------|----------------------------------------------|----------------------------------------------------------------------|
 | Frame visual embedder | `google/siglip2-base-patch16-256`            | Image-text contrastive. ~600 MB VRAM. Larger variants swappable.     |
-| Caption VLM           | `qwen2.5-vl-3b` via llama-server             | Generates per-scene captions. User-swappable to SmolVLM2-Video, etc. |
+| Caption VLM           | user-provided OpenAI-compatible endpoint     | Default model name `qwen2.5-vl-3b`. Endpoint URL is required config — no default host assumed. |
 | Caption text embedder | `BAAI/bge-small-en-v1.5`                     | Embeds VLM-generated captions for the text retrieval index.          |
 
-All three are configurable. Defaults are picked for "fits comfortably in
-≤12 GB VRAM alongside ffmpeg + Python overhead."
+All three are configurable. The two locally-run models (SigLIP 2 + text
+embedder) together fit in ~2 GB of VRAM. The VLM is on whichever host the
+user points the endpoint at; default model `qwen2.5-vl-3b` fits in ≤12 GB
+VRAM on that host.
 
 ## Indexing pipeline
 
@@ -99,8 +111,11 @@ When a video appears in (or is registered into) a watched folder:
    `(video_id, frame_idx, timestamp_sec, embedding, thumb_path)`.
 4. **Per-scene captioning.** For each scene window (or fallback fixed window of
    5–10 s if scene detection is off), pick a representative frame (or up to 3
-   evenly-spaced frames if the VLM accepts multi-image input) and call
-   llama-server's chat-completions endpoint with a captioning prompt.
+   evenly-spaced frames if the VLM accepts multi-image input) and POST to the
+   VLM's OpenAI-compatible `/v1/chat/completions` endpoint with a captioning
+   prompt. Endpoint URL and model name come from config; the app treats this
+   as a black-box HTTP call. Network failures surface as retryable errors on
+   the job.
 5. **Caption embeddings.** Embed each caption with the text embedder. Insert
    into `caption_embeddings`:
    `(video_id, scene_idx, start_sec, end_sec, caption, embedding)`.
@@ -179,7 +194,7 @@ Response shape:
 - `GET /api/videos/{id}/stream` — byte-range video stream for the in-browser
   player.
 - `GET /api/videos/{id}/thumbs/{frame_idx}` — thumbnail file.
-- `GET /api/health` — DB ok, llama-server reachable, GPU detected,
+- `GET /api/health` — DB ok, VLM endpoint reachable, GPU detected,
   indexed-count.
 - `WS /ws/jobs` — push job progress events to the UI.
 
@@ -235,8 +250,15 @@ Selected env vars:
 - GPU is required at runtime; the app fails fast with a clear message if no
   GPU is detected (no silent CPU fallback).
 - Library mount is read-only.
+- The VLM endpoint is required user config — the app does not ship a default
+  host. Users point `VS_VLM_ENDPOINT` at any reachable OpenAI-compatible
+  chat-completions URL.
 
-Example compose:
+### Default compose (VLM is remote)
+
+This is the expected primary deployment. The VLM lives on another machine —
+LAN box, GPU server, Tailscale node, hosted endpoint, etc. The app container
+just needs to be able to reach it.
 
 ```yaml
 services:
@@ -251,7 +273,7 @@ services:
       - VS_LIBRARY_PATHS=/library
       - VS_DATA_DIR=/data
       - VS_MODELS_DIR=/models
-      - VS_VLM_ENDPOINT=http://llama-server:8080
+      - VS_VLM_ENDPOINT=http://vlm-host.tailnet.example:8080
       - VS_VLM_MODEL=qwen2.5-vl-3b
       - VS_SIGLIP_MODEL=google/siglip2-base-patch16-256
       - VS_TEXT_EMBEDDER=BAAI/bge-small-en-v1.5
@@ -261,6 +283,23 @@ services:
         reservations:
           devices:
             - { driver: nvidia, count: 1, capabilities: [gpu] }
+```
+
+For a host-run dev VLM (llama-server on the same machine), set
+`VS_VLM_ENDPOINT=http://host.docker.internal:8080`.
+
+### Optional: co-located VLM sidecar
+
+Provided as a convenience pattern for users without a separate VLM host. Not
+the primary supported path.
+
+```yaml
+services:
+  videosearch:
+    # ...as above, but:
+    environment:
+      - VS_VLM_ENDPOINT=http://llama-server:8080
+      # ...
 
   llama-server:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
@@ -276,10 +315,6 @@ services:
             - { driver: nvidia, count: 1, capabilities: [gpu] }
 ```
 
-During development, the user runs llama-server directly on the host; the
-container can point at `http://host.docker.internal:8080` and skip the
-sidecar.
-
 Logging: structured JSON to stdout. `docker logs` is the supported interface.
 
 ## Testing
@@ -291,8 +326,8 @@ Logging: structured JSON to stdout. `docker logs` is the supported interface.
   full ingest → search loop end-to-end without a GPU. This is the primary
   guard against integration regressions.
 - **Smoke test** in the real Docker image with one small video, real SigLIP,
-  real llama-server, asserting a known query returns the known video. Runs in
-  CI on a GPU runner where available; otherwise local-only.
+  and a real VLM endpoint, asserting a known query returns the known video.
+  Runs in CI on a GPU runner where available; otherwise local-only.
 - **Frontend** — Playwright covers the search → click → play happy path.
 
 ## Roadmap
