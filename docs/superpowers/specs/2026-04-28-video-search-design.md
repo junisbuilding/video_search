@@ -5,13 +5,16 @@
 
 ## Goal
 
-A self-hosted web app that indexes videos in user-registered folders and serves
-plain-text semantic search over them. A search returns the matching files
-grouped together with the specific moments inside each file (timestamps +
-thumbnails + captions). Distributed as a `pip`-installable Python package
-(`uv tool install` recommended). Primary deploy target: macOS on Apple
-Silicon (M3 MacBook Air, 16 GB unified memory). The same package runs on
-Linux/WSL with NVIDIA CUDA for development.
+A self-hosted web app that indexes videos and serves plain-text semantic
+search over them. Two ingest entrypoints: a **library** of registered
+folders that the app watches and auto-indexes, and **ad-hoc ingest** of
+single files or one-off folders that don't belong in the library. Both run
+through the same pipeline. Search returns matching files grouped with the
+specific moments inside each file (timestamps + thumbnails + captions).
+Distributed as a `pip`-installable Python package (`uv tool install`
+recommended). Primary deploy target: macOS on Apple Silicon (M3 MacBook
+Air, 16 GB unified memory). The same package runs on Linux/WSL with NVIDIA
+CUDA for development.
 
 ## Non-goals (v1)
 
@@ -47,12 +50,20 @@ Inside the process:
 1. **API/web server** — FastAPI on uvicorn. Serves the SvelteKit frontend
    bundled in the package, exposes JSON endpoints, streams video bytes for
    the player, pushes job progress over WebSocket.
-2. **Watcher** — async task in the same event loop. Uses `watchdog` to
-   observe registered library folders and enqueues ingest jobs for new /
-   changed files, marks deletions.
+2. **Watcher** — async task in the same event loop. Uses `watchdog`
+   (FSEvents on Mac, inotify on Linux) to observe registered library
+   folders. On folder registration, runs a one-shot recursive walk to
+   enqueue every existing video; afterwards switches to incremental mode,
+   enqueuing on file create / modify and marking files `missing` on
+   delete. Applies the configured skip-list (see Indexing pipeline) so
+   noise like `.DS_Store` and dotfiles never reach the queue.
 3. **Indexer** — async task in the same event loop. Pulls jobs from a
-   SQLite-backed queue and runs the ingestion pipeline. Blocking work
-   (ffmpeg subprocess, model inference) is dispatched to a thread pool via
+   SQLite-backed queue and runs the ingestion pipeline. Accepts work from
+   two sources: the watcher (library files) and the `/api/ingest`
+   endpoint (ad-hoc files / folders that aren't in the library). Same
+   pipeline either way; ad-hoc videos are stored in the same `videos`
+   table with no `library_folder_id`. Blocking work (ffmpeg subprocess,
+   model inference) is dispatched to a thread pool via
    `asyncio.run_in_executor`. Both `llama-cpp-python` and PyTorch release
    the GIL during inference, so the API stays responsive while indexing
    runs.
@@ -116,11 +127,21 @@ both from the same source repo to avoid version mismatch.
 
 ## Indexing pipeline
 
-When a video appears in (or is registered into) a watched folder:
+A path enters the pipeline two ways: the watcher emitting an event for a
+library folder, or an explicit `POST /api/ingest` for an ad-hoc file /
+folder. Both paths apply the skip-list (see below) and then run the same
+steps:
 
 1. **Probe & dedupe.** ffprobe metadata. Compute content hash (xxhash of
-   first/middle/last MB + duration + size). Skip if hash already in DB.
-   Insert `videos` row with `status='pending'`.
+   first/middle/last MB + duration + size). Look up by hash:
+   - **Hit, status `indexed`:** if the path differs, update it (handles
+     file moves). Done — no re-indexing.
+   - **Hit, status `missing`:** restore to the previously recorded status
+     (`indexed` if it was indexed before; otherwise resume). Update path.
+     Done — no re-indexing.
+   - **Hit, status `pending` / `failed`:** continue from the first
+     incomplete step.
+   - **No hit:** insert a new row with `status='pending'` and continue.
 2. **Frame sampling.**
    - Uniform: 1 frame/sec via ffmpeg (`-vf fps=1`).
    - Scene detection: PySceneDetect (content-aware) to obtain shot
@@ -148,17 +169,37 @@ Failure handling: per-step retry with backoff. On terminal failure, set
 permits partial state — frame embeddings without captions are valid;
 resumption picks up from the first incomplete step.
 
+**Skip-list.** Default-skipped during folder walks and watcher events:
+- Hidden / metadata: `.DS_Store`, `.fseventsd`, `.Spotlight-*`, `.Trashes`,
+  `Thumbs.db`, any path starting with `.`
+- Bundles: anything inside a `*.photoslibrary`, `*.app`, `*.framework`
+- Size: files smaller than ~100 KB (likely not real video)
+- Extensions: only `.mp4`, `.mkv`, `.mov`, `.avi`, `.webm`, `.m4v`, `.wmv`,
+  `.mpg`, `.mpeg`, `.3gp`, `.flv`, `.ts` are considered
+The list is a config value — users can extend or tighten it.
+
+**Missing-file handling.** When the watcher emits a delete event for a
+file that maps to an existing `videos` row, the row's `status` is set to
+`missing` rather than purged. Search results hide `missing` videos by
+default (a UI toggle reveals them). If the file reappears at the same
+path with the same hash (e.g. external drive remounted), it transitions
+back to `indexed` without re-indexing. If it appears with a different
+hash, it's re-indexed.
+
 Configurable knobs: frame fps, scene detection on/off, VLM model path
 (local file or HF repo id), text embedder, max concurrent ingest jobs
 (default 1; on Apple Silicon the GPU bandwidth is the bottleneck so 1 is
-correct).
+correct), skip-list extensions and patterns.
 
 ## Data model
 
 LanceDB tables (logical schema; concrete columns may add metadata fields):
 
 - `videos`: `id (uuid), path, hash, duration_sec, fps, width, height, mtime,
-  status, error, indexed_at`
+  status, error, indexed_at, library_folder_id (nullable; null for ad-hoc),
+  last_seen_at`
+  - `status ∈ {pending, indexed, failed, missing}`. `missing` means the
+    file was on disk and is no longer; row + embeddings preserved.
 - `frame_embeddings`: `video_id, frame_idx, timestamp_sec, embedding (vec),
   thumb_path`
 - `caption_embeddings`: `video_id, scene_idx, start_sec, end_sec, caption,
@@ -185,6 +226,10 @@ LanceDB tables (logical schema; concrete columns may add metadata fields):
 6. Group fused hits by video. Keep the top N moments per video (default 3).
    Sort videos by their best moment score. Return.
 
+By default, results from `missing` videos are filtered out. The query
+accepts `include_missing: true` to surface them (the UI exposes this as a
+toggle).
+
 Response shape:
 
 ```json
@@ -208,18 +253,36 @@ Response shape:
 
 ## API surface
 
-- `POST /api/search` — query as above.
+- `POST /api/search` — query as above. Body: `{ query, k, filters,
+  include_missing }`.
+- `GET /api/fs/list?path=...` — directory listing for the server-side
+  folder picker. Returns `{ entries: [{name, path, kind, size, mtime}],
+  parent }`. Kinds: `dir`, `video`, `other`. Path-traversal is checked
+  against the user's home dir as a soft boundary; explicit
+  `?allow_root=true` lifts it. Read-only — never writes.
 - `GET /api/library` — list folders, video counts by status.
-- `POST /api/library/folders` — register a folder.
+- `POST /api/library/folders` — register a folder. Triggers initial
+  recursive scan.
 - `DELETE /api/library/folders/{id}` — unregister a folder (preserves
   indexed data unless `?purge=true`).
+- `POST /api/library/folders/{id}/rescan` — manually re-run the recursive
+  scan (useful on WSL where `/mnt/c/...` FS events are unreliable, or
+  when an external drive is reconnected).
+- `POST /api/ingest` — ad-hoc ingest. Body: `{ path, recursive }`.
+  `path` is a single file or a folder; if a folder, walked once
+  (no watcher). Same pipeline as library ingest. Result rows have
+  `library_folder_id = null`.
 - `GET /api/jobs` — current and recent jobs with progress.
 - `POST /api/jobs/{video_id}/retry` — kick a failed job.
 - `GET /api/videos/{id}/stream` — byte-range video stream for the
   in-browser player.
 - `GET /api/videos/{id}/thumbs/{frame_idx}` — thumbnail file.
+- `POST /api/videos/{id}/reveal` — open the file's enclosing folder in
+  the OS file manager (`open -R` on Mac, `xdg-open` selecting the file
+  on Linux). Server-side action triggered by a result-card button.
+  No-ops if running headless.
 - `GET /api/health` — DB ok, VLM model loaded, GPU backend (MPS / CUDA)
-  detected, indexed-count.
+  detected, indexed-count, watcher status (per-folder).
 - `WS /ws/jobs` — push job progress events to the UI.
 
 ## Frontend
@@ -229,16 +292,25 @@ served by FastAPI under `/`.
 
 Pages:
 
-1. **Search** (default route) — query input; results grouped by video; each
-   group expands to up to 3 matching moments (thumbnail, timestamp,
-   caption, score, play). Click play opens an in-page video element seeked
-   to `start`.
-2. **Library** — list of watched folders, add/remove. Per-folder counts.
-   Indexing progress live (WebSocket).
+1. **Search** (default route) — query input; results grouped by video;
+   each group expands to up to 3 matching moments (thumbnail, timestamp,
+   caption, score, play). Click play opens an in-page video element
+   seeked to `start`. Each result card has a "Reveal in
+   Finder/Files" button (calls `POST /api/videos/{id}/reveal`). A toggle
+   in the search bar surfaces results from `missing` videos.
+2. **Library** — list of watched folders, with add / remove / rescan
+   actions. Adding a folder opens a server-side folder-picker tree
+   (driven by `GET /api/fs/list`) rooted at the user's home dir, with a
+   text-input fallback for arbitrary paths. Per-folder counts (indexed,
+   pending, failed, missing). Indexing progress live (WebSocket). A
+   separate "Ingest one-off" button on this page triggers ad-hoc ingest
+   via the same picker; ad-hoc videos are surfaced in a "Not in any
+   library" section.
 3. **Jobs** — current + recent jobs with per-step progress. Failed jobs
    show the error and a retry button.
 4. **Settings** — sampling fps, scene detection toggle, VLM model path,
-   embedder choices, read-only data-dir path.
+   embedder choices, skip-list (extensions + patterns), read-only
+   data-dir path.
 
 Video player: native `<video>` element against `/api/videos/{id}/stream`
 (byte-range). No transcoding in v1; if codec issues appear in practice, an
@@ -260,7 +332,10 @@ Hierarchy (highest priority last):
 
 Selected env vars:
 
-- `VS_LIBRARY_PATHS` — colon-separated paths the watcher monitors
+- `VS_LIBRARY_PATHS` — colon-separated paths the watcher monitors. Optional
+  bootstrap; primary registration mechanism is the Library page UI, which
+  persists folders in the DB. If both are present, the env var auto-adds
+  any missing folders on startup.
 - `VS_DATA_DIR` — LanceDB + thumbnails + jobs.db (default OS-appropriate)
 - `VS_MODELS_DIR` — model cache (default OS-appropriate)
 - `VS_VLM_MODEL` — local path *or* HF repo+file id (e.g.
@@ -282,14 +357,22 @@ brew install ffmpeg
 # install the package
 uv tool install video-search
 
-# run
-videosearch serve --library ~/Movies
+# run (no folders required up front — register via the Library page)
+videosearch serve
 # → http://localhost:8083
 ```
 
-First launch downloads model files (~3 GB total for SigLIP + bge + Qwen2.5-VL
+First launch downloads model files (~3 GB total: SigLIP + bge + Qwen2.5-VL
 Q4 + mmproj) into the model cache directory. Subsequent launches are
 immediate.
+
+**macOS Full Disk Access.** When the watcher first reads from system
+folders covered by macOS TCC (`~/Documents`, `~/Desktop`, `~/Downloads`,
+`~/Movies`, external drives), macOS prompts for permission. Click "Allow."
+For the launchd-managed service install path, the prompt appears in
+System Settings → Privacy & Security → Files and Folders the first time
+the service tries to read those locations; the partner may need to grant
+access there explicitly. Setup docs walk through this once.
 
 ### Linux / WSL (development)
 
@@ -328,6 +411,37 @@ the data dir when run as a service.
   `llama-cpp-python` and PyTorch wheels installed. CPU fallback exists but
   is unsupported in v1.
 
+## Known limitations / platform caveats
+
+Documented behaviors the user should expect; not bugs to fix in v1.
+
+- **Linux inotify watch limit.** `fs.inotify.max_user_watches` (commonly
+  defaulted to 8192 or 65536) caps how many directories one user can
+  watch recursively. A large library can exceed this. The watcher
+  detects the failure on registration, marks the folder
+  `status='watch_failed'` with a clear error pointing at:
+  ```
+  sudo sysctl fs.inotify.max_user_watches=524288
+  ```
+  The app does not modify sysctls itself.
+- **WSL2 + `/mnt/c/...` filesystem events.** Filesystem changes made on
+  the Windows side don't reliably propagate to inotify inside the Linux
+  VM. While developing on WSL, expect that adding a video on Windows
+  won't trigger automatic indexing. Use the per-folder "Rescan now"
+  button on the Library page (or the corresponding API). This is a WSL
+  limitation, not something the app can fix.
+- **macOS Full Disk Access.** First reads from TCC-protected directories
+  (`~/Documents`, `~/Desktop`, `~/Downloads`, `~/Movies`, external
+  drives) prompt for permission. When run as a launchd service, grants
+  must be made via System Settings → Privacy & Security → Files and
+  Folders rather than via a popup.
+- **iCloud Drive placeholders.** Files stored in iCloud Drive may exist
+  on disk only as zero-byte placeholders until accessed. ffprobe fails
+  on those. The pipeline marks such files as `failed` with a clear
+  `iCloud placeholder` error and does not retry automatically; the user
+  can either keep the file local (Finder → "Always Keep on This Mac")
+  or move it out of iCloud.
+
 ## Testing
 
 - **Unit tests** for indexing-pipeline steps, RRF fusion, config layering,
@@ -345,14 +459,18 @@ the data dir when run as a service.
 
 **v1 (this spec):**
 
-1. Library/folder registration + filesystem watcher
-2. Indexing pipeline (frame embeddings + scene captions + caption
-   embeddings)
-3. Search API with RRF fusion and grouped results
-4. Frontend: search, library, jobs, settings
-5. `pip` / `uv` package with Mac and Linux/CUDA install paths
-6. launchd / systemd service templates
-7. Test suites described above
+1. Library/folder registration + filesystem watcher (initial recursive
+   scan + incremental events, skip-list)
+2. Ad-hoc ingest of single files / one-off folders (same pipeline)
+3. Indexing pipeline (frame embeddings + scene captions + caption
+   embeddings) with `missing` state for vanished files
+4. Search API with RRF fusion, grouped results, default-hidden missing
+5. Frontend: search (with Reveal-in-Finder + missing toggle), library
+   (with server-side folder picker, ad-hoc ingest, rescan), jobs,
+   settings
+6. `pip` / `uv` package with Mac and Linux/CUDA install paths
+7. launchd / systemd service templates
+8. Test suites described above
 
 **v2+ (designed for, not built):**
 
