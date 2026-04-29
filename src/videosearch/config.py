@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import tomllib
 from pathlib import Path
@@ -39,10 +40,8 @@ class Settings(BaseSettings):
 def load_config(toml_path: Path | None = None) -> Settings:
     """Load settings, layering TOML file (if present) under env vars.
 
-    Environment variables (VS_* prefix) take precedence over TOML file values.
+    Precedence: env vars > TOML file > field defaults.
     """
-    import os
-
     file_data: dict = {}
     if toml_path and toml_path.exists():
         with toml_path.open("rb") as f:
