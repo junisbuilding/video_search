@@ -73,6 +73,32 @@ def test_index_is_idempotent(tmp_path: Path, tiny_video: Path):
            len(s["frames"].list_for_video(r2.video_id))
 
 
+def test_index_path_updated(tmp_path: Path, tiny_video: Path):
+    s = _services(tmp_path)
+    work_dir = tmp_path / "work"
+    kwargs = dict(
+        path=tiny_video,
+        videos=s["videos"],
+        frames=s["frames"],
+        captions=s["captions"],
+        image_embedder=s["image_embedder"],
+        text_embedder=s["text_embedder"],
+        captioner=s["captioner"],
+        work_dir=work_dir,
+        frame_fps=2.0,
+    )
+    r = index_video(**kwargs)
+    # Simulate path drift (file was moved since last index)
+    s["videos"].update(r.video_id, path="/old/path/video.mp4")
+
+    r2 = index_video(**kwargs)
+    assert r2.skipped_reason == "path_updated"
+    assert r2.video_id == r.video_id
+    v = s["videos"].find_by_id(r.video_id)
+    assert v is not None
+    assert v.path == str(tiny_video.resolve())
+
+
 def test_index_restores_missing_to_indexed(tmp_path: Path, tiny_video: Path):
     s = _services(tmp_path)
     work_dir = tmp_path / "work"
@@ -96,3 +122,31 @@ def test_index_restores_missing_to_indexed(tmp_path: Path, tiny_video: Path):
     assert v is not None
     assert v.status == "indexed"
     assert r2.skipped_reason == "restored_from_missing"
+
+
+def test_index_resumes_from_failed(tmp_path: Path, tiny_video: Path):
+    s = _services(tmp_path)
+    work_dir = tmp_path / "work"
+    kwargs = dict(
+        path=tiny_video,
+        videos=s["videos"],
+        frames=s["frames"],
+        captions=s["captions"],
+        image_embedder=s["image_embedder"],
+        text_embedder=s["text_embedder"],
+        captioner=s["captioner"],
+        work_dir=work_dir,
+        frame_fps=2.0,
+    )
+    r = index_video(**kwargs)
+    # Force into failed state with a recorded error
+    s["videos"].update(r.video_id, status="failed", error="simulated failure")
+
+    r2 = index_video(**kwargs)
+    assert r2.skipped_reason == "resumed"
+    assert r2.status == "indexed"
+    assert r2.video_id == r.video_id
+    v = s["videos"].find_by_id(r.video_id)
+    assert v is not None
+    assert v.status == "indexed"
+    assert v.error is None  # error column cleared on successful resume

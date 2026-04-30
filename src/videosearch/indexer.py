@@ -4,6 +4,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from videosearch.models.protocols import Captioner, ImageEmbedder, TextEmbedder
 from videosearch.scanning.frames import (
@@ -29,7 +30,7 @@ class IndexResult:
     video_id: str
     hash: str
     status: str
-    skipped_reason: str | None = None  # already_indexed | restored_from_missing | path_updated | None
+    skipped_reason: Literal["already_indexed", "path_updated", "restored_from_missing", "resumed"] | None = None
 
 
 def index_video(
@@ -53,25 +54,35 @@ def index_video(
 
     existing = videos.find_by_hash(h)
     if existing is not None:
-        return _resolve_existing(existing, path, videos)
-
-    info = probe(path)
-    video_id = str(uuid.uuid4())
-    now = time.time()
-    row = VideoRow(
-        id=video_id,
-        path=str(path),
-        hash=h,
-        duration_sec=info.duration_sec,
-        fps=info.fps,
-        width=info.width,
-        height=info.height,
-        mtime=path.stat().st_mtime,
-        status="pending",
-        last_seen_at=now,
-        library_folder_id=library_folder_id,
-    )
-    videos.insert(row)
+        skip_result = _resolve_existing(existing, path, videos)
+        if skip_result is not None:
+            return skip_result
+        # Resume: existing status was pending or failed — clear partial data and re-run
+        video_id = existing.id
+        duration_sec = existing.duration_sec
+        frames.delete_for_video(video_id)
+        captions.delete_for_video(video_id)
+        is_resume = True
+    else:
+        info = probe(path)
+        video_id = str(uuid.uuid4())
+        duration_sec = info.duration_sec
+        now = time.time()
+        row = VideoRow(
+            id=video_id,
+            path=str(path),
+            hash=h,
+            duration_sec=duration_sec,
+            fps=info.fps,
+            width=info.width,
+            height=info.height,
+            mtime=path.stat().st_mtime,
+            status="pending",
+            last_seen_at=now,
+            library_folder_id=library_folder_id,
+        )
+        videos.insert(row)
+        is_resume = False
 
     try:
         thumbs_dir = work_dir / video_id / "thumbs"
@@ -79,31 +90,45 @@ def index_video(
         _write_frame_embeddings(frames, video_id, samples, image_embedder)
 
         if scene_detection:
-            scenes = detect_scenes(path, fallback_duration_sec=info.duration_sec)
+            scenes = detect_scenes(path, fallback_duration_sec=duration_sec)
         else:
-            scenes = _fallback_scenes(info.duration_sec)
+            scenes = _fallback_scenes(duration_sec)
         _write_caption_embeddings(
             captions, video_id, scenes, samples, captioner, text_embedder, caption_prompt
         )
 
         videos.update(video_id, status="indexed", indexed_at=time.time(), error=None)
-        return IndexResult(video_id=video_id, hash=h, status="indexed")
+        return IndexResult(
+            video_id=video_id,
+            hash=h,
+            status="indexed",
+            skipped_reason="resumed" if is_resume else None,
+        )
     except Exception as e:
         videos.update(video_id, status="failed", error=str(e))
         raise
 
 
-def _resolve_existing(existing: VideoRow, path: Path, videos: VideosRepo) -> IndexResult:
-    """Handle hash hits: update path, restore missing, otherwise no-op."""
+def _resolve_existing(existing: VideoRow, path: Path, videos: VideosRepo) -> IndexResult | None:
+    """Handle hash hits. Returns None when the embedding pipeline should re-run (pending/failed)."""
     updates: dict = {"last_seen_at": time.time()}
-    skipped = "already_indexed"
-    if str(path) != existing.path:
+    path_changed = str(path) != existing.path
+    if path_changed:
         updates["path"] = str(path)
-        skipped = "path_updated"
+
+    if existing.status in {"pending", "failed"}:
+        # Apply metadata updates and signal caller to resume the pipeline
+        videos.update(existing.id, **updates)
+        return None
+
     if existing.status == "missing":
-        # Restore to indexed if embeddings already exist; otherwise resume on next ingest.
         updates["status"] = "indexed"
-        skipped = "restored_from_missing"
+        skipped: str = "restored_from_missing"
+    elif path_changed:
+        skipped = "path_updated"
+    else:
+        skipped = "already_indexed"
+
     videos.update(existing.id, **updates)
     return IndexResult(
         video_id=existing.id,
