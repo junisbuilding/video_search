@@ -29,6 +29,7 @@ def test_resolve_hf_spec(tmp_path: Path):
         cache_dir=str(tmp_path),
     )
     assert result == fake_path
+    assert isinstance(result, Path)
 
 
 def test_resolve_missing_local_raises(tmp_path: Path):
