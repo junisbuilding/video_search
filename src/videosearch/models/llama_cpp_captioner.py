@@ -40,8 +40,8 @@ class LlamaCppCaptioner:
         )
 
     def caption(self, images: Sequence[Path], *, prompt: str) -> str:
-        content: list[dict] = [
-            {"type": "image_url", "image_url": {"url": _to_data_uri(Path(p))}}
+        content: list[dict[str, object]] = [
+            {"type": "image_url", "image_url": {"url": _to_data_uri(p)}}
             for p in images
         ]
         content.append({"type": "text", "text": prompt})
