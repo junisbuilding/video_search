@@ -1,8 +1,7 @@
-import torch
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
+import torch
 from PIL import Image
 
 from videosearch.models.siglip import SiglipEmbedder
@@ -10,10 +9,9 @@ from videosearch.storage.schemas import SIGLIP_DIM
 
 
 def _mock_inputs() -> MagicMock:
-    """BatchEncoding stand-in: supports .to() and **-unpacking."""
+    # spec=dict would block .to() since dict has no .to attribute
     m = MagicMock()
     m.keys.return_value = []  # ** unpacking yields empty dict
-    m.__iter__ = MagicMock(return_value=iter([]))
     m.to.return_value = m
     return m
 
