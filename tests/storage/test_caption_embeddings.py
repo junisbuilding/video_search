@@ -22,3 +22,12 @@ def test_bulk_insert_and_list(tmp_path: Path):
     rows = repo.list_for_video("v1")
     assert len(rows) == 2
     assert sorted(r.scene_idx for r in rows) == [0, 1]
+
+
+def test_search_returns_limited_rows(tmp_path: Path):
+    repo = CaptionEmbeddingsRepo(Database(tmp_path))
+    repo.insert_many([_caption("v1", i) for i in range(5)])
+    query = [0.2] * TEXT_EMBED_DIM
+    results = repo.search(query, limit=3)
+    assert len(results) == 3
+    assert all(isinstance(r, CaptionEmbeddingRow) for r in results)

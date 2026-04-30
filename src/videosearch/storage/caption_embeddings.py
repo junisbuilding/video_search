@@ -20,5 +20,9 @@ class CaptionEmbeddingsRepo:
         results = self._table.search().where(f"video_id = {_sql_literal(video_id)}").to_list()
         return [CaptionEmbeddingRow(**r) for r in results]
 
+    def search(self, query_vector: list[float], limit: int) -> list[CaptionEmbeddingRow]:
+        results = self._table.search(query_vector).limit(limit).to_list()
+        return [CaptionEmbeddingRow(**{k: v for k, v in r.items() if not k.startswith("_")}) for r in results]
+
     def delete_for_video(self, video_id: str) -> None:
         self._table.delete(f"video_id = {_sql_literal(video_id)}")
