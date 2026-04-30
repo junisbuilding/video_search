@@ -29,19 +29,22 @@ def test_image(tmp_path_factory) -> Path:
     return img
 
 
+@pytest.fixture(scope="module")
+def siglip_embedder(cfg) -> SiglipEmbedder:
+    return SiglipEmbedder(cfg.siglip_model)
+
+
 @pytest.mark.smoke
-def test_siglip_image_embedding_shape(cfg, test_image):
-    embedder = SiglipEmbedder(cfg.siglip_model)
-    vecs = embedder.embed_images([test_image])
+def test_siglip_image_embedding_shape(siglip_embedder, test_image):
+    vecs = siglip_embedder.embed_images([test_image])
 
     assert len(vecs) == 1
     assert len(vecs[0]) == SIGLIP_DIM
 
 
 @pytest.mark.smoke
-def test_siglip_text_embedding_shape(cfg):
-    embedder = SiglipEmbedder(cfg.siglip_model)
-    vec = embedder.embed_text("a colorful abstract image")
+def test_siglip_text_embedding_shape(siglip_embedder):
+    vec = siglip_embedder.embed_text("a colorful abstract image")
 
     assert len(vec) == SIGLIP_DIM
 
