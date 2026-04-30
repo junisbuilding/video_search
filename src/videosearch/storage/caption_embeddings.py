@@ -22,6 +22,7 @@ class CaptionEmbeddingsRepo:
 
     def search(self, query_vector: list[float], limit: int) -> list[CaptionEmbeddingRow]:
         results = self._table.search(query_vector).limit(limit).to_list()
+        # LanceDB ANN search appends _distance; strip all private keys before Pydantic construction.
         return [CaptionEmbeddingRow(**{k: v for k, v in r.items() if not k.startswith("_")}) for r in results]
 
     def delete_for_video(self, video_id: str) -> None:

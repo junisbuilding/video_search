@@ -22,9 +22,14 @@ class FrameEmbeddingsRepo:
 
     def search(self, query_vector: list[float], limit: int) -> list[FrameEmbeddingRow]:
         results = self._table.search(query_vector).limit(limit).to_list()
+        # LanceDB ANN search appends _distance; strip all private keys before Pydantic construction.
         return [FrameEmbeddingRow(**{k: v for k, v in r.items() if not k.startswith("_")}) for r in results]
 
     def find_nearest(self, video_id: str, timestamp_sec: float) -> FrameEmbeddingRow | None:
+        """Return the frame closest in time to timestamp_sec. None if video has no frames.
+
+        Tie-breaking between equidistant frames is arbitrary (storage retrieval order).
+        """
         rows = self.list_for_video(video_id)
         if not rows:
             return None
