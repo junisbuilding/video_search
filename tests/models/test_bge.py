@@ -43,3 +43,4 @@ def test_embed_text_calls_encode_with_normalize():
     mock_st.encode.assert_called_once()
     _, kwargs = mock_st.encode.call_args
     assert kwargs.get("normalize_embeddings") is True
+    assert kwargs.get("show_progress_bar") is False

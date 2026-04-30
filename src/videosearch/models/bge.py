@@ -2,23 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-import torch
 from sentence_transformers import SentenceTransformer
 
-
-def _select_device(device: str | None) -> str:
-    if device is not None:
-        return device
-    if torch.backends.mps.is_available():
-        return "mps"
-    if torch.cuda.is_available():
-        return "cuda"
-    return "cpu"
+from videosearch.models._device import select_device
 
 
 class BgeTextEmbedder:
     def __init__(self, model_name: str, *, device: str | None = None):
-        self._model = SentenceTransformer(model_name, device=_select_device(device))
+        self.device = select_device(device)
+        self._model = SentenceTransformer(model_name, device=self.device)
 
     def embed_text(self, texts: Sequence[str]) -> list[list[float]]:
         vecs = self._model.encode(
