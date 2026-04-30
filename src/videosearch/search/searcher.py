@@ -66,4 +66,5 @@ class Searcher:
             ))
 
         results.sort(key=lambda r: r.top_score, reverse=True)
+        # k caps the number of VideoResult objects returned; moments per video are uncapped.
         return SearchResponse(query=query, results=results[:k])

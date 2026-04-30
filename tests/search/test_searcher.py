@@ -93,6 +93,15 @@ def test_caption_hit_calls_find_nearest():
     assert moment.thumb_path == nearest.thumb_path
 
 
+def test_search_respects_k_limit():
+    searcher = _make_searcher(
+        frame_hits=[_frame_row("v1", 0, 1.0), _frame_row("v2", 0, 2.0)],
+        caption_hits=[],
+    )
+    result = searcher.search("query", k=1)
+    assert len(result.results) == 1
+
+
 def test_results_sorted_by_top_score_descending():
     # v1 appears in both frame and caption hits (higher RRF score)
     # v2 appears only in frame hits
@@ -103,4 +112,4 @@ def test_results_sorted_by_top_score_descending():
     )
     result = searcher.search("query")
     assert result.results[0].video_id == "v1"
-    assert result.results[0].top_score >= result.results[1].top_score
+    assert result.results[0].top_score > result.results[1].top_score
