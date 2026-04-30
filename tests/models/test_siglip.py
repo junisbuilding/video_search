@@ -9,9 +9,11 @@ from videosearch.storage.schemas import SIGLIP_DIM
 
 
 def _mock_inputs() -> MagicMock:
-    # spec=dict would block .to() since dict has no .to attribute
+    # spec=dict is omitted: dict has no .to attribute, so MagicMock(spec=dict) would raise
+    # AttributeError on .to(device). We constrain **-unpacking by returning [] from .keys()
+    # so **inputs expands to an empty dict inside embed_images / embed_text.
     m = MagicMock()
-    m.keys.return_value = []  # ** unpacking yields empty dict
+    m.keys.return_value = []
     m.to.return_value = m
     return m
 
@@ -33,6 +35,11 @@ def _make_embedder() -> tuple[SiglipEmbedder, MagicMock, MagicMock]:
         embedder = SiglipEmbedder("mock-model", device="cpu")
 
     return embedder, mock_processor, mock_model
+
+
+def test_model_put_in_eval_mode():
+    _, _, mock_model = _make_embedder()
+    mock_model.eval.assert_called_once()
 
 
 def test_embed_images_returns_correct_shape(tmp_path: Path):
