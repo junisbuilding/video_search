@@ -17,6 +17,9 @@ build/
 .vscode/
 *.swp
 
+# Git worktrees
+.worktrees/
+
 # Project data
 data/
 /models/
