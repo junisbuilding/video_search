@@ -21,8 +21,10 @@ def test_patch_settings_writes_config_toml(client, test_settings):
     client.patch("/api/settings", json={"frame_fps": 3.0})
     config_path = test_settings.data_dir / "config.toml"
     assert config_path.exists()
-    content = config_path.read_text()
-    assert "frame_fps" in content
+    import tomllib
+    with open(config_path, "rb") as f:
+        data = tomllib.load(f)
+    assert data["frame_fps"] == 3.0
 
 
 def test_patch_settings_rejects_unknown_fields(client):

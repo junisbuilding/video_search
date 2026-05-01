@@ -55,6 +55,16 @@ def test_thumb_returns_404_for_unknown_frame(client, mock_frames):
     assert r.status_code == 404
 
 
+def test_thumb_returns_404_when_file_not_on_disk(client, mock_frames):
+    row = FrameEmbeddingRow(
+        video_id="v1", frame_idx=1, timestamp_sec=1.0,
+        embedding=[0.1] * SIGLIP_DIM, thumb_path="/nonexistent/frame.jpg",
+    )
+    mock_frames.find_frame.return_value = row
+    r = client.get("/api/videos/v1/thumbs/1")
+    assert r.status_code == 404
+
+
 def test_thumb_serves_jpeg_file(client, mock_frames, tmp_path):
     thumb = tmp_path / "frame.jpg"
     thumb.write_bytes(b"fake jpeg")
@@ -80,3 +90,14 @@ def test_reveal_calls_open_on_macos(client, mock_videos, tmp_path):
     mock_popen.assert_called_once()
     args = mock_popen.call_args[0][0]
     assert args[0] == "open" and args[1] == "-R"
+
+
+def test_reveal_returns_501_on_linux_without_display(client, mock_videos, tmp_path, monkeypatch):
+    video_file = tmp_path / "test.mp4"
+    video_file.write_bytes(b"x")
+    mock_videos.find_by_id.return_value = _video(path=str(video_file))
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    with patch("sys.platform", "linux"):
+        r = client.post("/api/videos/v1/reveal")
+    assert r.status_code == 501

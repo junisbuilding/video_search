@@ -49,8 +49,8 @@ def test_fs_list_rejects_path_outside_home(client):
     assert r.status_code == 403
 
 
-def test_fs_list_returns_parent(client):
+def test_fs_list_returns_parent_none_at_home(client):
     home = Path.home().resolve()
     r = client.get(f"/api/fs/list?path={home}")
     data = r.json()
-    assert "parent" in data
+    assert data["parent"] is None
