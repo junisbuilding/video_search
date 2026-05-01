@@ -22,7 +22,9 @@ def mock_searcher():
 
 @pytest.fixture
 def mock_jobs():
-    return MagicMock()
+    m = MagicMock()
+    m.enqueue.return_value = "test-job-id"
+    return m
 
 
 @pytest.fixture
