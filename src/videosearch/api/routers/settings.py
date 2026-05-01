@@ -51,7 +51,7 @@ async def patch_settings(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     current = settings.model_dump()
-    patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    patch = {k: body.model_dump()[k] for k in body.model_fields_set}
     current.update(patch)
     new_settings = Settings(**current)
 

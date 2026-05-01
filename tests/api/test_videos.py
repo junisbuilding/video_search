@@ -80,6 +80,12 @@ def test_reveal_returns_404_for_unknown_video(client, mock_videos):
     assert r.status_code == 404
 
 
+def test_reveal_returns_404_when_file_not_on_disk(client, mock_videos):
+    mock_videos.find_by_id.return_value = _video(path="/nonexistent/file.mp4")
+    r = client.post("/api/videos/v1/reveal")
+    assert r.status_code == 404
+
+
 def test_reveal_calls_open_on_macos(client, mock_videos, tmp_path):
     video_file = tmp_path / "test.mp4"
     video_file.write_bytes(b"x")
@@ -89,7 +95,7 @@ def test_reveal_calls_open_on_macos(client, mock_videos, tmp_path):
     assert r.status_code == 200
     mock_popen.assert_called_once()
     args = mock_popen.call_args[0][0]
-    assert args[0] == "open" and args[1] == "-R"
+    assert args == ["open", "-R", str(video_file)]
 
 
 def test_reveal_returns_501_on_linux_without_display(client, mock_videos, tmp_path, monkeypatch):

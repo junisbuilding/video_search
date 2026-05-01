@@ -57,6 +57,8 @@ async def reveal_video(
     if video is None:
         raise HTTPException(status_code=404, detail="video not found")
     path = Path(video.path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="video file not found on disk")
     if sys.platform == "darwin":
         subprocess.Popen(["open", "-R", str(path)])
     else:

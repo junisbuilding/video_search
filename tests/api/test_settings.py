@@ -36,3 +36,9 @@ def test_patch_settings_rejects_unknown_fields(client):
 def test_patch_settings_invalid_type_returns_422(client):
     r = client.patch("/api/settings", json={"port": "not-an-int"})
     assert r.status_code == 422
+
+
+def test_patch_settings_can_disable_scene_detection(client, test_settings):
+    r = client.patch("/api/settings", json={"scene_detection": False})
+    assert r.status_code == 200
+    assert r.json()["scene_detection"] is False

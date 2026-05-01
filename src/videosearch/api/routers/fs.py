@@ -30,7 +30,7 @@ def _safe_resolve(path_str: str | None) -> Path:
     if not path_str:
         return _HOME
     p = Path(path_str).resolve()
-    if not str(p).startswith(str(_HOME)):
+    if not p.is_relative_to(_HOME):
         raise HTTPException(status_code=403, detail="path outside home directory")
     return p
 

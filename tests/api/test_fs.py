@@ -54,3 +54,18 @@ def test_fs_list_returns_parent_none_at_home(client):
     r = client.get(f"/api/fs/list?path={home}")
     data = r.json()
     assert data["parent"] is None
+
+
+def test_fs_list_rejects_sibling_directory(client, tmp_path, monkeypatch):
+    import videosearch.api.routers.fs as fs_module
+    # Set _HOME to tmp_path/home_user
+    home_dir = tmp_path / "home_user"
+    home_dir.mkdir()
+    monkeypatch.setattr(fs_module, "_HOME", home_dir)
+
+    # tmp_path/home_userevil shares the string prefix "home_user" but is not inside home_dir
+    sibling = tmp_path / "home_userevil"
+    sibling.mkdir()
+
+    r = client.get(f"/api/fs/list?path={sibling}")
+    assert r.status_code == 403
