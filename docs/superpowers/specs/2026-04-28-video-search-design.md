@@ -50,13 +50,16 @@ Inside the process:
 1. **API/web server** — FastAPI on uvicorn. Serves the SvelteKit frontend
    bundled in the package, exposes JSON endpoints, streams video bytes for
    the player, pushes job progress over WebSocket.
-2. **Watcher** — async task in the same event loop. Uses `watchdog`
-   (FSEvents on Mac, inotify on Linux) to observe registered library
-   folders. On folder registration, runs a one-shot recursive walk to
-   enqueue every existing video; afterwards switches to incremental mode,
-   enqueuing on file create / modify and marking files `missing` on
-   delete. Applies the configured skip-list (see Indexing pipeline) so
-   noise like `.DS_Store` and dotfiles never reach the queue.
+2. **Watcher** *(not yet implemented — planned for a future phase)* — async
+   task in the same event loop. Uses `watchdog` (FSEvents on Mac, inotify
+   on Linux) to observe registered library folders. On folder registration,
+   runs a one-shot recursive walk to enqueue every existing video;
+   afterwards switches to incremental mode, enqueuing on file create /
+   modify and marking files `missing` on delete. Applies the configured
+   skip-list (see Indexing pipeline) so noise like `.DS_Store` and dotfiles
+   never reach the queue. Until implemented, users trigger indexing via
+   `POST /api/library/folders` (initial scan on registration) or
+   `POST /api/library/folders/{id}/rescan` (manual re-scan).
 3. **Indexer** — async task in the same event loop. Pulls jobs from a
    SQLite-backed queue and runs the ingestion pipeline. Accepts work from
    two sources: the watcher (library files) and the `/api/ingest`
@@ -281,7 +284,7 @@ Response shape:
   on Linux). Server-side action triggered by a result-card button.
   No-ops if running headless.
 - `GET /api/health` — DB ok, VLM model loaded, GPU backend (MPS / CUDA)
-  detected, indexed-count, watcher status (per-folder).
+  detected, indexed-count. (Watcher status omitted until watcher phase.)
 - `WS /ws/jobs` — push job progress events to the UI.
 
 ## Frontend
@@ -453,18 +456,19 @@ Documented behaviors the user should expect; not bugs to fix in v1.
 
 **v1 (this spec):**
 
-1. Library/folder registration + filesystem watcher (initial recursive
-   scan + incremental events, skip-list)
-2. Ad-hoc ingest of single files / one-off folders (same pipeline)
-3. Indexing pipeline (frame embeddings + scene captions + caption
-   embeddings) with `missing` state for vanished files
-4. Search API with RRF fusion, grouped results, default-hidden missing
-5. Frontend: search (with Reveal-in-Finder + missing toggle), library
-   (with server-side folder picker, ad-hoc ingest, rescan), jobs,
-   settings
-6. `pip` / `uv` package with Mac and Linux/CUDA install paths
-7. launchd / systemd service templates
-8. Test suites described above
+1. ✅ Indexing pipeline (frame embeddings + scene captions + caption embeddings)
+2. ✅ Real model adapters (SigLIP, BGE, Qwen2.5-VL via llama-cpp-python)
+3. ✅ Search service (RRF fusion, grouped results, `Searcher` class)
+4. **HTTP API layer** — FastAPI server, background indexer worker, WebSocket job
+   progress, all REST endpoints, video streaming, thumbnail serving, CLI entrypoint
+5. **Filesystem watcher** *(not yet started)* — watchdog-based FSEvents/inotify
+   watcher; library registration triggers initial recursive scan then incremental
+   mode; `missing` state on delete
+6. Frontend: search (with Reveal-in-Finder + missing toggle), library
+   (with server-side folder picker, ad-hoc ingest, rescan), jobs, settings
+7. `pip` / `uv` package with Mac and Linux/CUDA install paths
+8. launchd / systemd service templates
+9. Test suites described above
 
 **v2+ (designed for, not built):**
 
