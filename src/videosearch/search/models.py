@@ -9,6 +9,7 @@ class Moment:
     score: float
     thumb_path: str | None
     caption: str | None = None
+    frame_idx: int | None = None
 
 
 @dataclass(frozen=True)

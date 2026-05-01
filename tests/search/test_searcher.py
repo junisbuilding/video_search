@@ -113,3 +113,23 @@ def test_results_sorted_by_top_score_descending():
     result = searcher.search("query")
     assert result.results[0].video_id == "v1"
     assert result.results[0].top_score > result.results[1].top_score
+
+
+def test_frame_hit_carries_frame_idx():
+    searcher = _make_searcher(
+        frame_hits=[_frame_row("v1", 7, 1.0)],
+        caption_hits=[],
+    )
+    result = searcher.search("query")
+    assert result.results[0].moments[0].frame_idx == 7
+
+
+def test_caption_hit_carries_frame_idx_from_nearest():
+    nearest = _frame_row("v1", 5, 0.5)
+    searcher = _make_searcher(
+        frame_hits=[],
+        caption_hits=[_caption_row("v1", 0)],
+        nearest=nearest,
+    )
+    result = searcher.search("scene query")
+    assert result.results[0].moments[0].frame_idx == 5

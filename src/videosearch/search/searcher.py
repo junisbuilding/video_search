@@ -47,6 +47,7 @@ class Searcher:
                     timestamp_sec=row.timestamp_sec,
                     score=score,
                     thumb_path=row.thumb_path,
+                    frame_idx=row.frame_idx,
                 )
             else:
                 row = caption_by_id[composite_id]
@@ -58,6 +59,7 @@ class Searcher:
                     score=score,
                     thumb_path=nearest.thumb_path if nearest else None,
                     caption=row.caption,
+                    frame_idx=nearest.frame_idx if nearest else None,
                 )
             moments_by_video.setdefault(video_id, []).append(moment)
 
