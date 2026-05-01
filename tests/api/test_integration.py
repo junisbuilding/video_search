@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NamedTuple
 from unittest.mock import MagicMock
 
 import pytest
@@ -8,8 +9,6 @@ from fastapi.testclient import TestClient
 
 from videosearch.api import deps
 from videosearch.api.app import create_app
-from videosearch.api.worker import IndexerWorker
-from videosearch.api.ws import JobBroadcaster
 from videosearch.config import Settings
 from videosearch.models.stubs import StubCaptioner, StubImageEmbedder, StubTextEmbedder
 from videosearch.search import Searcher
@@ -19,6 +18,19 @@ from videosearch.storage.frame_embeddings import FrameEmbeddingsRepo
 from videosearch.storage.jobs import JobsQueue
 from videosearch.storage.library_folders import LibraryFoldersRepo
 from videosearch.storage.videos import VideosRepo
+
+
+class IntegrationFixture(NamedTuple):
+    client: TestClient
+    jobs_queue: JobsQueue
+    videos: VideosRepo
+    frames: FrameEmbeddingsRepo
+    captions: CaptionEmbeddingsRepo
+    image_embedder: StubImageEmbedder
+    text_embedder: StubTextEmbedder
+    captioner: StubCaptioner
+    settings: Settings
+    tiny_video: Path
 
 
 @pytest.fixture
@@ -55,28 +67,38 @@ def integration_client(tmp_path, tiny_video):
     app.dependency_overrides.clear()
 
     with TestClient(app) as client:
-        yield client, jobs_queue, videos, frames, captions, image_embedder, text_embedder, captioner, settings, tiny_video
+        yield IntegrationFixture(
+            client=client,
+            jobs_queue=jobs_queue,
+            videos=videos,
+            frames=frames,
+            captions=captions,
+            image_embedder=image_embedder,
+            text_embedder=text_embedder,
+            captioner=captioner,
+            settings=settings,
+            tiny_video=tiny_video,
+        )
 
 
 def test_integration_ingest_then_search(integration_client):
     from videosearch.indexer import index_video
 
-    client, jobs_queue, videos, frames, captions, image_emb, text_emb, captioner, settings, tiny_video = integration_client
-
+    fx = integration_client
     result = index_video(
-        path=tiny_video,
-        videos=videos,
-        frames=frames,
-        captions=captions,
-        image_embedder=image_emb,
-        text_embedder=text_emb,
-        captioner=captioner,
-        work_dir=settings.data_dir / "work",
+        path=fx.tiny_video,
+        videos=fx.videos,
+        frames=fx.frames,
+        captions=fx.captions,
+        image_embedder=fx.image_embedder,
+        text_embedder=fx.text_embedder,
+        captioner=fx.captioner,
+        work_dir=fx.settings.data_dir / "work",
         frame_fps=2.0,
     )
     assert result.status == "indexed"
 
-    r = client.post("/api/search", json={"query": "test query"})
+    r = fx.client.post("/api/search", json={"query": "test query"})
     assert r.status_code == 200
     data = r.json()
     assert len(data["results"]) >= 1
@@ -84,33 +106,32 @@ def test_integration_ingest_then_search(integration_client):
 
 
 def test_integration_health_endpoint(integration_client):
-    client = integration_client[0]
-    r = client.get("/api/health")
+    r = integration_client.client.get("/api/health")
     assert r.status_code == 200
     assert r.json()["db"] is True
 
 
 def test_integration_ingest_endpoint_enqueues_job(integration_client, tmp_path):
-    client, jobs_queue = integration_client[0], integration_client[1]
     video_file = tmp_path / "sample.mp4"
     video_file.write_bytes(b"x" * 200_000)
 
-    r = client.post("/api/ingest", json={"path": str(video_file)})
+    r = integration_client.client.post("/api/ingest", json={"path": str(video_file)})
     assert r.status_code == 200
     job_ids = r.json()["enqueued"]
     assert len(job_ids) == 1
 
-    job = jobs_queue.get_by_id(job_ids[0])
+    job = integration_client.jobs_queue.get_by_id(job_ids[0])
     assert job is not None
     assert job.path == str(video_file)
 
 
 def test_integration_jobs_list_after_ingest(integration_client, tmp_path):
-    client, jobs_queue = integration_client[0], integration_client[1]
     video_file = tmp_path / "sample2.mp4"
     video_file.write_bytes(b"x" * 200_000)
-    client.post("/api/ingest", json={"path": str(video_file)})
+    integration_client.client.post("/api/ingest", json={"path": str(video_file)})
 
-    r = client.get("/api/jobs")
+    r = integration_client.client.get("/api/jobs")
     assert r.status_code == 200
-    assert len(r.json()["jobs"]) >= 1
+    jobs = r.json()["jobs"]
+    assert len(jobs) >= 1
+    assert any(j["path"] == str(video_file) for j in jobs)
