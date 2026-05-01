@@ -10,6 +10,7 @@ def test_ingest_single_file(client, mock_jobs, tmp_path):
     assert r.status_code == 200
     data = r.json()
     assert len(data["enqueued"]) == 1
+    assert data["enqueued"][0] == "test-job-id"
     mock_jobs.enqueue.assert_called_once()
 
 

@@ -17,6 +17,7 @@ def test_list_jobs_returns_recent(client, mock_jobs):
     r = client.get("/api/jobs")
     assert r.status_code == 200
     assert len(r.json()["jobs"]) == 2
+    assert r.json()["jobs"][0]["id"] == "j1"
     mock_jobs.list_recent.assert_called_once_with(200)
 
 
@@ -32,7 +33,7 @@ def test_retry_job_enqueues_new_job(client, mock_jobs):
     r = client.post("/api/jobs/j1/retry")
     assert r.status_code == 200
     assert r.json()["job_id"] == "j2"
-    mock_jobs.enqueue.assert_called_once()
+    mock_jobs.enqueue.assert_called_once_with(kind="index", path="/a.mp4", library_folder_id=None)
 
 
 def test_retry_job_returns_404_for_unknown_id(client, mock_jobs):
