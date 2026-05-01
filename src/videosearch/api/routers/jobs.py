@@ -40,11 +40,15 @@ async def list_jobs(
     return JobsListResponse(jobs=[_job_to_response(j) for j in jobs.list_recent(200)])
 
 
-@router.post("/jobs/{job_id}/retry")
+class RetryResponse(BaseModel):
+    job_id: str
+
+
+@router.post("/jobs/{job_id}/retry", response_model=RetryResponse)
 async def retry_job(
     job_id: str,
     jobs: JobsQueue = Depends(get_jobs_queue),
-) -> dict:
+) -> RetryResponse:
     job = jobs.get_by_id(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
@@ -55,4 +59,4 @@ async def retry_job(
         path=job.path,
         library_folder_id=job.library_folder_id,
     )
-    return {"job_id": new_id}
+    return RetryResponse(job_id=new_id)

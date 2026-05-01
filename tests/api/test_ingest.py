@@ -40,3 +40,13 @@ def test_ingest_directory_non_recursive(client, mock_jobs, tmp_path):
 def test_ingest_nonexistent_path_returns_400(client):
     r = client.post("/api/ingest", json={"path": "/no/such/file.mp4"})
     assert r.status_code == 400
+
+
+def test_ingest_skips_hidden_files(client, mock_jobs, tmp_path):
+    (tmp_path / ".hidden").write_bytes(b"x" * 200_000)
+
+    r = client.post("/api/ingest", json={"path": str(tmp_path)})
+
+    assert r.status_code == 200
+    assert len(r.json()["enqueued"]) == 0
+    mock_jobs.enqueue.assert_not_called()

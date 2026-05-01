@@ -17,6 +17,7 @@ def test_list_jobs_returns_recent(client, mock_jobs):
     r = client.get("/api/jobs")
     assert r.status_code == 200
     assert len(r.json()["jobs"]) == 2
+    mock_jobs.list_recent.assert_called_once_with(200)
 
 
 def test_retry_job_returns_409_if_not_failed(client, mock_jobs):
