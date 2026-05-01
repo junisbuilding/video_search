@@ -47,7 +47,7 @@ def _make_searcher(
     text_emb.embed_text.return_value = [[0.1] * TEXT_EMBED_DIM]
     frames.search.return_value = frame_hits
     captions.search.return_value = caption_hits
-    frames.find_nearest.return_value = nearest
+    frames.list_for_video.return_value = [nearest] if nearest else []
 
     return Searcher(frames=frames, captions=captions, image_embedder=image_emb, text_embedder=text_emb)
 
@@ -76,7 +76,7 @@ def test_search_groups_moments_by_video():
 def test_search_returns_empty_for_no_hits():
     searcher = _make_searcher(frame_hits=[], caption_hits=[])
     result = searcher.search("nothing")
-    assert result.results == []
+    assert result.results == ()
 
 
 def test_caption_hit_calls_find_nearest():

@@ -94,4 +94,4 @@ def test_search_empty_db_returns_empty(tmp_path: Path):
         text_embedder=StubTextEmbedder(),
     )
     response = searcher.search("anything")
-    assert response.results == []
+    assert response.results == ()

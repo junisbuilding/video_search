@@ -15,10 +15,10 @@ class Moment:
 class VideoResult:
     video_id: str
     top_score: float
-    moments: list[Moment]
+    moments: tuple[Moment, ...]
 
 
 @dataclass(frozen=True)
 class SearchResponse:
     query: str
-    results: list[VideoResult]
+    results: tuple[VideoResult, ...]

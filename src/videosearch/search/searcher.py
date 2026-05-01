@@ -34,6 +34,10 @@ class Searcher:
 
         fused = rrf_fuse([list(frame_by_id), list(caption_by_id)])
 
+        # Pre-fetch frames for all videos with caption hits to avoid one DB read per caption.
+        caption_video_ids = {r.video_id for r in caption_hits}
+        frames_by_video = {vid: self._frames.list_for_video(vid) for vid in caption_video_ids}
+
         moments_by_video: dict[str, list[Moment]] = {}
         for composite_id, score in fused:
             if composite_id.startswith("f:"):
@@ -47,7 +51,8 @@ class Searcher:
             else:
                 row = caption_by_id[composite_id]
                 video_id = row.video_id
-                nearest = self._frames.find_nearest(video_id, row.start_sec)
+                frames = frames_by_video.get(video_id, [])
+                nearest = min(frames, key=lambda f: abs(f.timestamp_sec - row.start_sec), default=None)
                 moment = Moment(
                     timestamp_sec=row.start_sec,
                     score=score,
@@ -62,9 +67,9 @@ class Searcher:
             results.append(VideoResult(
                 video_id=video_id,
                 top_score=moments_sorted[0].score,
-                moments=moments_sorted,
+                moments=tuple(moments_sorted),
             ))
 
         results.sort(key=lambda r: r.top_score, reverse=True)
         # k caps the number of VideoResult objects returned; moments per video are uncapped.
-        return SearchResponse(query=query, results=results[:k])
+        return SearchResponse(query=query, results=tuple(results[:k]))
