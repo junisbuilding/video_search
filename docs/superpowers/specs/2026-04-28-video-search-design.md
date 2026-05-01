@@ -13,8 +13,8 @@ through the same pipeline. Search returns matching files grouped with the
 specific moments inside each file (timestamps + thumbnails + captions).
 Distributed as a `pip`-installable Python package (`uv tool install`
 recommended). Primary deploy target: macOS on Apple Silicon (M3 MacBook
-Air, 16 GB unified memory). The same package runs on Linux/WSL with NVIDIA
-CUDA for development.
+Air, 16 GB unified memory). The same package runs on bare Linux with NVIDIA
+CUDA.
 
 ## Non-goals (v1)
 
@@ -34,8 +34,8 @@ CUDA for development.
 
 - Primary deploy: M3 MacBook Air, 16 GB unified memory. All inference runs
   in-process via Apple's Metal backend.
-- Dev environment: WSL on Windows with NVIDIA GPU. Identical Python codebase;
-  PyTorch and llama-cpp-python both auto-select CUDA.
+- Secondary deploy: bare Linux with NVIDIA GPU. PyTorch and llama-cpp-python
+  both auto-select CUDA.
 - Total resident memory at default model sizes ~6–8 GB. Comfortable headroom
   on a 16 GB MBA after macOS overhead.
 - Single-user, local network use.
@@ -266,8 +266,7 @@ Response shape:
 - `DELETE /api/library/folders/{id}` — unregister a folder (preserves
   indexed data unless `?purge=true`).
 - `POST /api/library/folders/{id}/rescan` — manually re-run the recursive
-  scan (useful on WSL where `/mnt/c/...` FS events are unreliable, or
-  when an external drive is reconnected).
+  scan (useful when an external drive is reconnected or FS events are missed).
 - `POST /api/ingest` — ad-hoc ingest. Body: `{ path, recursive }`.
   `path` is a single file or a folder; if a folder, walked once
   (no watcher). Same pipeline as library ingest. Result rows have
@@ -374,7 +373,7 @@ System Settings → Privacy & Security → Files and Folders the first time
 the service tries to read those locations; the partner may need to grant
 access there explicitly. Setup docs walk through this once.
 
-### Linux / WSL (development)
+### Linux
 
 ```sh
 # system deps
@@ -383,7 +382,8 @@ sudo apt install ffmpeg
 # install with CUDA-enabled llama-cpp-python wheel
 CMAKE_ARGS="-DGGML_CUDA=on" uv tool install video-search
 
-videosearch serve --library /mnt/c/Videos
+videosearch serve
+# → http://localhost:8083
 ```
 
 For supported CUDA versions, llama-cpp-python ships pre-built CUDA wheels
@@ -424,12 +424,6 @@ Documented behaviors the user should expect; not bugs to fix in v1.
   sudo sysctl fs.inotify.max_user_watches=524288
   ```
   The app does not modify sysctls itself.
-- **WSL2 + `/mnt/c/...` filesystem events.** Filesystem changes made on
-  the Windows side don't reliably propagate to inotify inside the Linux
-  VM. While developing on WSL, expect that adding a video on Windows
-  won't trigger automatic indexing. Use the per-folder "Rescan now"
-  button on the Library page (or the corresponding API). This is a WSL
-  limitation, not something the app can fix.
 - **macOS Full Disk Access.** First reads from TCC-protected directories
   (`~/Documents`, `~/Desktop`, `~/Downloads`, `~/Movies`, external
   drives) prompt for permission. When run as a launchd service, grants
