@@ -66,20 +66,26 @@ class JobsQueue:
         return job_id
 
     def claim(self) -> Job | None:
-        cur = self._conn.execute(
-            "SELECT * FROM jobs WHERE status = 'pending' "
-            "ORDER BY created_at ASC LIMIT 1"
-        )
-        row = cur.fetchone()
-        if row is None:
-            return None
+        """Atomically pull the oldest pending job and mark it in_progress.
+
+        Safe for concurrent callers: uses BEGIN IMMEDIATE + rowcount check.
+        """
         now = time.time()
-        self._conn.execute(
-            "UPDATE jobs SET status = 'in_progress', updated_at = ? "
-            "WHERE id = ? AND status = 'pending'",
-            (now, row["id"]),
-        )
-        self._conn.commit()
+        with self._conn:
+            cur = self._conn.execute(
+                "SELECT * FROM jobs WHERE status = 'pending' "
+                "ORDER BY created_at ASC LIMIT 1"
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            updated = self._conn.execute(
+                "UPDATE jobs SET status = 'in_progress', updated_at = ? "
+                "WHERE id = ? AND status = 'pending'",
+                (now, row["id"]),
+            )
+            if updated.rowcount == 0:
+                return None
         return Job(**{**dict(row), "status": "in_progress", "updated_at": now})
 
     def update_progress(self, job_id: str, progress: float) -> None:

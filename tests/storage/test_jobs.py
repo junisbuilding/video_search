@@ -53,9 +53,11 @@ def test_list_recent_returns_all_statuses(tmp_path):
     q.claim()
     q.complete(id1)
     jobs = q.list_recent(limit=10)
-    ids = {j.id for j in jobs}
-    assert id1 in ids
-    assert id2 in ids
+    by_id = {j.id: j for j in jobs}
+    assert id1 in by_id
+    assert id2 in by_id
+    assert by_id[id1].status == "completed"
+    assert by_id[id2].status in ("pending", "in_progress")
     q.close()
 
 

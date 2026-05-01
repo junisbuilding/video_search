@@ -38,7 +38,7 @@ class FrameEmbeddingsRepo:
     def find_frame(self, video_id: str, frame_idx: int) -> FrameEmbeddingRow | None:
         results = (
             self._table.search()
-            .where(f"video_id = {_sql_literal(video_id)} AND frame_idx = {frame_idx}")
+            .where(f"video_id = {_sql_literal(video_id)} AND frame_idx = {_sql_literal(frame_idx)}")
             .limit(1)
             .to_list()
         )
