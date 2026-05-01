@@ -133,3 +133,13 @@ def test_caption_hit_carries_frame_idx_from_nearest():
     )
     result = searcher.search("scene query")
     assert result.results[0].moments[0].frame_idx == 5
+
+
+def test_caption_hit_with_no_frames_produces_frame_idx_none():
+    searcher = _make_searcher(
+        frame_hits=[],
+        caption_hits=[_caption_row("v1", 0)],
+        nearest=None,
+    )
+    result = searcher.search("scene query")
+    assert result.results[0].moments[0].frame_idx is None
