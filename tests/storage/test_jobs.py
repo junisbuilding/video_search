@@ -44,3 +44,44 @@ def test_jobs_persist_across_instances(tmp_path: Path):
     job = JobsQueue(db).claim()
     assert job is not None
     assert job.video_id == "v1"
+
+
+def test_list_recent_returns_all_statuses(tmp_path):
+    q = JobsQueue(tmp_path / "jobs.db")
+    id1 = q.enqueue(kind="index", path="/a.mp4")
+    id2 = q.enqueue(kind="index", path="/b.mp4")
+    q.claim()
+    q.complete(id1)
+    jobs = q.list_recent(limit=10)
+    ids = {j.id for j in jobs}
+    assert id1 in ids
+    assert id2 in ids
+    q.close()
+
+
+def test_enqueue_stores_path_and_folder_id(tmp_path):
+    q = JobsQueue(tmp_path / "jobs.db")
+    job_id = q.enqueue(kind="index", path="/videos/clip.mp4", library_folder_id="folder-1")
+    jobs = q.list_recent(limit=10)
+    job = next(j for j in jobs if j.id == job_id)
+    assert job.path == "/videos/clip.mp4"
+    assert job.library_folder_id == "folder-1"
+    q.close()
+
+
+def test_get_by_id_returns_job(tmp_path):
+    q = JobsQueue(tmp_path / "jobs.db")
+    job_id = q.enqueue(kind="index", path="/a.mp4")
+    job = q.get_by_id(job_id)
+    assert job is not None
+    assert job.id == job_id
+    q.close()
+
+
+def test_update_video_id_sets_field(tmp_path):
+    q = JobsQueue(tmp_path / "jobs.db")
+    job_id = q.enqueue(kind="index", path="/a.mp4")
+    q.update_video_id(job_id, "video-uuid-1")
+    job = q.get_by_id(job_id)
+    assert job.video_id == "video-uuid-1"
+    q.close()

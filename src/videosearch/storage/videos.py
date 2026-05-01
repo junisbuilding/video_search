@@ -49,3 +49,18 @@ class VideosRepo:
     def list_by_status(self, status: str) -> list[VideoRow]:
         results = self._table.search().where(f"status = {_sql_literal(status)}").to_list()
         return [VideoRow(**r) for r in results]
+
+    def list_by_folder(self, folder_id: str | None) -> list[VideoRow]:
+        if folder_id is None:
+            results = (
+                self._table.search()
+                .where("library_folder_id IS NULL")
+                .to_list()
+            )
+        else:
+            results = (
+                self._table.search()
+                .where(f"library_folder_id = {_sql_literal(folder_id)}")
+                .to_list()
+            )
+        return [VideoRow(**r) for r in results]

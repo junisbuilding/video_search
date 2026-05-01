@@ -60,3 +60,30 @@ def test_list_by_status(tmp_path: Path):
     repo.insert(_video(hash="h3", status="failed"))
     indexed = repo.list_by_status("indexed")
     assert len(indexed) == 2
+
+
+def _make_video(id_: str, library_folder_id: str | None = None) -> VideoRow:
+    return _video(id=id_, hash=id_, library_folder_id=library_folder_id)
+
+
+def test_list_by_folder_returns_matching_videos(tmp_path):
+    db = Database(tmp_path / "data")
+    repo = VideosRepo(db)
+    v1 = _make_video("v1", library_folder_id="folder-1")
+    v2 = _make_video("v2", library_folder_id="folder-1")
+    v3 = _make_video("v3", library_folder_id="folder-2")
+    repo.insert(v1); repo.insert(v2); repo.insert(v3)
+    results = repo.list_by_folder("folder-1")
+    ids = {r.id for r in results}
+    assert ids == {"v1", "v2"}
+
+
+def test_list_by_folder_none_returns_ad_hoc(tmp_path):
+    db = Database(tmp_path / "data")
+    repo = VideosRepo(db)
+    v1 = _make_video("v1", library_folder_id=None)
+    v2 = _make_video("v2", library_folder_id="folder-1")
+    repo.insert(v1); repo.insert(v2)
+    results = repo.list_by_folder(None)
+    assert len(results) == 1
+    assert results[0].id == "v1"

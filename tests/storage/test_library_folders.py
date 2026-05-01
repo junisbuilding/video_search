@@ -25,3 +25,23 @@ def test_delete_by_id(tmp_path: Path):
     repo.insert(f)
     repo.delete(f.id)
     assert repo.list_all() == []
+
+
+def _make_folder(id_: str, path: str = "/movies") -> LibraryFolderRow:
+    return LibraryFolderRow(id=id_, path=path, added_at=time.time())
+
+
+def test_find_by_id_returns_folder(tmp_path):
+    db = Database(tmp_path / "data")
+    repo = LibraryFoldersRepo(db)
+    repo.insert(_make_folder("f1", "/movies"))
+    result = repo.find_by_id("f1")
+    assert result is not None
+    assert result.id == "f1"
+    assert result.path == "/movies"
+
+
+def test_find_by_id_returns_none_when_missing(tmp_path):
+    db = Database(tmp_path / "data")
+    repo = LibraryFoldersRepo(db)
+    assert repo.find_by_id("nonexistent") is None

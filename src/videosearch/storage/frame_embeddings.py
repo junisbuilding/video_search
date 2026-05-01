@@ -35,5 +35,16 @@ class FrameEmbeddingsRepo:
             return None
         return min(rows, key=lambda r: abs(r.timestamp_sec - timestamp_sec))
 
+    def find_frame(self, video_id: str, frame_idx: int) -> FrameEmbeddingRow | None:
+        results = (
+            self._table.search()
+            .where(f"video_id = {_sql_literal(video_id)} AND frame_idx = {frame_idx}")
+            .limit(1)
+            .to_list()
+        )
+        if not results:
+            return None
+        return FrameEmbeddingRow(**{k: v for k, v in results[0].items() if not k.startswith("_")})
+
     def delete_for_video(self, video_id: str) -> None:
         self._table.delete(f"video_id = {_sql_literal(video_id)}")

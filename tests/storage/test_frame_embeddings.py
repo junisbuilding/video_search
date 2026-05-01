@@ -49,3 +49,25 @@ def test_find_nearest_returns_closest_by_timestamp(tmp_path: Path):
 def test_find_nearest_returns_none_for_missing_video(tmp_path: Path):
     repo = FrameEmbeddingsRepo(Database(tmp_path))
     assert repo.find_nearest("nonexistent", 0.0) is None
+
+
+def test_find_frame_returns_correct_row(tmp_path):
+    db = Database(tmp_path / "data")
+    repo = FrameEmbeddingsRepo(db)
+    rows = [
+        FrameEmbeddingRow(video_id="v1", frame_idx=1, timestamp_sec=0.0,
+                          embedding=[0.1]*SIGLIP_DIM, thumb_path="/t/1.jpg"),
+        FrameEmbeddingRow(video_id="v1", frame_idx=2, timestamp_sec=1.0,
+                          embedding=[0.1]*SIGLIP_DIM, thumb_path="/t/2.jpg"),
+    ]
+    repo.insert_many(rows)
+    result = repo.find_frame("v1", 2)
+    assert result is not None
+    assert result.frame_idx == 2
+    assert result.thumb_path == "/t/2.jpg"
+
+
+def test_find_frame_returns_none_when_missing(tmp_path):
+    db = Database(tmp_path / "data")
+    repo = FrameEmbeddingsRepo(db)
+    assert repo.find_frame("v1", 99) is None
