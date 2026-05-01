@@ -41,6 +41,11 @@ def mock_folders():
 
 
 @pytest.fixture
+def mock_captions():
+    return MagicMock()
+
+
+@pytest.fixture
 def mock_broadcaster():
     return MagicMock()
 
@@ -58,6 +63,7 @@ def client(
     mock_videos,
     mock_frames,
     mock_folders,
+    mock_captions,
     mock_broadcaster,
     mock_worker,
 ):
@@ -69,6 +75,7 @@ def client(
         deps.get_videos_repo: lambda: mock_videos,
         deps.get_frames_repo: lambda: mock_frames,
         deps.get_library_folders_repo: lambda: mock_folders,
+        deps.get_captions_repo: lambda: mock_captions,
         deps.get_broadcaster: lambda: mock_broadcaster,
         deps.get_worker: lambda: mock_worker,
     })
