@@ -74,6 +74,8 @@ def test_search_returns_moments_with_timestamps(tmp_path: Path, tiny_video: Path
     )
     response = searcher.search("query")
 
+    assert response.results, "Expected at least one search result after indexing"
+    assert response.results[0].moments, "Expected at least one moment in the first result"
     for video_result in response.results:
         for moment in video_result.moments:
             assert moment.timestamp_sec >= 0.0
