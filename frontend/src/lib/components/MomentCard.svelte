@@ -10,7 +10,7 @@
     moment: MomentResponse;
     filename?: string;
     selected?: boolean;
-    onselect?: (moment: MomentResponse) => void;
+    onselect?: () => void;
   } = $props();
 
   function formatTime(sec: number): string {
@@ -25,8 +25,8 @@
   class:selected
   role="article"
   tabindex="0"
-  onclick={() => onselect?.(moment)}
-  onkeydown={(e) => e.key === 'Enter' && onselect?.(moment)}
+  onclick={() => onselect?.()}
+  onkeydown={(e) => e.key === 'Enter' && onselect?.()}
 >
   <div class="thumb">
     {#if moment.thumb_url}
