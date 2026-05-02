@@ -99,4 +99,12 @@ def create_app(settings: Settings, *, startup: bool = True) -> FastAPI:
     app.include_router(settings_router.router, prefix="/api")
     app.include_router(make_ws_router(deps.get_broadcaster, deps.get_jobs_queue))
 
+    from pathlib import Path
+
+    from fastapi.staticfiles import StaticFiles
+
+    _STATIC = Path(__file__).parent.parent / "static"
+    if _STATIC.exists():
+        app.mount("/", StaticFiles(directory=_STATIC, html=True), name="static")
+
     return app
