@@ -162,16 +162,13 @@ from pathlib import Path
 _STATIC = Path(__file__).parent.parent / "static"
 
 if _STATIC.exists():
-    # SPA fallback: serve index.html for all unmatched routes
-    @app.get("/{path:path}", include_in_schema=False)
-    async def spa_fallback(path: str):
-        from fastapi.responses import FileResponse
-        return FileResponse(_STATIC / "index.html")
-
+    # html=True makes StaticFiles serve index.html for any path not found
+    # in the directory — this is the SPA fallback. FastAPI routes registered
+    # above are matched first (before the mount), so /api/* is unaffected.
     app.mount("/", StaticFiles(directory=_STATIC, html=True), name="static")
 ```
 
-The `if _STATIC.exists()` guard means the API works normally during backend-only development before the frontend is built.
+The `if _STATIC.exists()` guard means the API works normally during backend-only development before the frontend is built. No explicit catch-all route is needed: `html=True` on `StaticFiles` returns `index.html` for any path not found as a real file, which is exactly the SPA fallback behaviour.
 
 ## Build integration
 
