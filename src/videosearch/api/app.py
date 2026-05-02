@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from videosearch.api import deps
 from videosearch.api.ws import JobBroadcaster, make_ws_router
@@ -98,10 +100,6 @@ def create_app(settings: Settings, *, startup: bool = True) -> FastAPI:
     app.include_router(fs.router, prefix="/api")
     app.include_router(settings_router.router, prefix="/api")
     app.include_router(make_ws_router(deps.get_broadcaster, deps.get_jobs_queue))
-
-    from pathlib import Path
-
-    from fastapi.staticfiles import StaticFiles
 
     _STATIC = Path(__file__).parent.parent / "static"
     if _STATIC.exists():
