@@ -60,15 +60,19 @@ class IndexerWorker(threading.Thread):
             self._jobs.fail(job.id, error="job has no path")
             self._broadcaster.broadcast({
                 "job_id": job.id, "video_id": job.video_id,
+                "path": job.path,
                 "kind": job.kind, "status": "failed",
                 "progress": 0.0, "error": "job has no path",
+                "created_at": job.created_at, "updated_at": job.updated_at,
             })
             return
 
         self._broadcaster.broadcast({
             "job_id": job.id, "video_id": job.video_id,
+            "path": job.path,
             "kind": job.kind, "status": "in_progress",
             "progress": 0.0, "error": None,
+            "created_at": job.created_at, "updated_at": job.updated_at,
         })
         try:
             result = index_video(
@@ -88,13 +92,17 @@ class IndexerWorker(threading.Thread):
             self._jobs.complete(job.id)
             self._broadcaster.broadcast({
                 "job_id": job.id, "video_id": result.video_id,
+                "path": job.path,
                 "kind": job.kind, "status": "completed",
                 "progress": 1.0, "error": None,
+                "created_at": job.created_at, "updated_at": job.updated_at,
             })
         except Exception as e:
             self._jobs.fail(job.id, error=str(e))
             self._broadcaster.broadcast({
                 "job_id": job.id, "video_id": job.video_id,
+                "path": job.path,
                 "kind": job.kind, "status": "failed",
                 "progress": 0.0, "error": str(e),
+                "created_at": job.created_at, "updated_at": job.updated_at,
             })

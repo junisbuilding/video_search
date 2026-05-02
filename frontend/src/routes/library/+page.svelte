@@ -6,26 +6,43 @@
 
   let folders = $state<FolderResponse[]>([]);
   let showPicker = $state(false);
+  let error = $state<string | null>(null);
 
   onMount(async () => {
-    const lib = await getLibrary();
-    folders = lib.folders;
+    try {
+      const lib = await getLibrary();
+      folders = lib.folders;
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to load library';
+    }
   });
 
   async function handleRescan(id: string) {
-    await apiRescan(id);
+    try {
+      await apiRescan(id);
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Rescan failed';
+    }
   }
 
   async function handleRemove(id: string, path: string) {
     if (!confirm(`Remove folder "${path}" from library?`)) return;
-    await apiDelete(id);
-    folders = folders.filter(f => f.id !== id);
+    try {
+      await apiDelete(id);
+      folders = folders.filter(f => f.id !== id);
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Remove failed';
+    }
   }
 
   async function handleAdd(path: string) {
     showPicker = false;
-    const res = await addFolder(path);
-    folders = [...folders, res.folder];
+    try {
+      const res = await addFolder(path);
+      folders = [...folders, res.folder];
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to add folder';
+    }
   }
 </script>
 
@@ -34,6 +51,10 @@
     <h1 class="page-title">Library</h1>
     <button class="btn-primary" onclick={() => (showPicker = true)}>Add Folder</button>
   </div>
+
+  {#if error}
+    <p class="error-banner">{error}</p>
+  {/if}
 
   {#if folders.length === 0}
     <p class="empty">No folders added yet.</p>
@@ -169,5 +190,15 @@
   .btn-danger:hover {
     border-color: #f87171;
     color: #f87171;
+  }
+
+  .error-banner {
+    font-size: 11px;
+    color: #f87171;
+    background: #f8717122;
+    border: 1px solid #f87171;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
   }
 </style>

@@ -9,6 +9,7 @@
   let query = $state('');
   let indexedCount = $state<number | null>(null);
   let loading = $state(false);
+  let searchError = $state<string | null>(null);
 
   onMount(async () => {
     try {
@@ -23,9 +24,12 @@
     e.preventDefault();
     if (!query.trim()) return;
     loading = true;
+    searchError = null;
     try {
       const result = await apiSearch(query.trim(), 10);
       searchResults.set(result);
+    } catch (e) {
+      searchError = e instanceof Error ? e.message : 'Search failed';
     } finally {
       loading = false;
     }
@@ -76,6 +80,10 @@
         </button>
       </div>
     </form>
+
+    {#if searchError}
+      <p class="search-error">{searchError}</p>
+    {/if}
 
     {#if $searchResults !== null}
       <p class="result-count">
@@ -174,6 +182,11 @@
   .indexed-count {
     font-size: 10px;
     color: #333;
+  }
+
+  .search-error {
+    font-size: 10px;
+    color: #f87171;
   }
 
   .results-area {

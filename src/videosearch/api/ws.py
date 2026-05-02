@@ -48,10 +48,13 @@ def make_ws_router(get_broadcaster_dep, get_jobs_queue_dep) -> APIRouter:
                 await websocket.send_json({
                     "job_id": job.id,
                     "video_id": job.video_id,
+                    "path": job.path,
                     "kind": job.kind,
                     "status": job.status,
                     "progress": job.progress,
                     "error": job.error,
+                    "created_at": job.created_at,
+                    "updated_at": job.updated_at,
                 })
             while True:
                 await websocket.receive_text()
