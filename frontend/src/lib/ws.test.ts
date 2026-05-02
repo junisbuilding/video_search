@@ -56,7 +56,7 @@ describe('connectJobsSocket', () => {
     expect(WebSocketSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('closes and reconnects on error', () => {
+  it('calls ws.close() on error', () => {
     connectJobsSocket();
     mockWs.onerror?.();
     expect(mockWs.close).toHaveBeenCalled();
