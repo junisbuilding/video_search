@@ -106,6 +106,7 @@
   }
 
   .nav-link {
+    font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', monospace;
     font-size: 11px;
     color: #555;
     text-decoration: none;
