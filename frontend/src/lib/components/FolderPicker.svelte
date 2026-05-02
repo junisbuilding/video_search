@@ -15,14 +15,18 @@
   let parentPath = $state<string | null>(null);
   let entries = $state<FsEntry[]>([]);
   let loading = $state(true);
+  let error = $state<string | null>(null);
 
   async function navigate(path?: string) {
     loading = true;
+    error = null;
     try {
       const result = await listFs(path);
       currentPath = result.path;
       parentPath = result.parent;
       entries = result.entries.filter(e => e.kind === 'dir' || e.kind === 'video');
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to load directory';
     } finally {
       loading = false;
     }
@@ -41,6 +45,8 @@
     <div class="entry-list">
       {#if loading}
         <p class="loading">Loading…</p>
+      {:else if error}
+        <p class="error">{error}</p>
       {:else}
         {#if parentPath !== null}
           <button class="entry entry-dir" onclick={() => navigate(parentPath ?? undefined)}>
@@ -69,7 +75,11 @@
 
     <div class="modal-footer">
       <button class="btn-cancel" onclick={oncancel}>Cancel</button>
-      <button class="btn-confirm" onclick={() => currentPath && onconfirm(currentPath)}>
+      <button
+        class="btn-confirm"
+        onclick={() => currentPath && onconfirm(currentPath)}
+        disabled={loading || currentPath === null}
+      >
         Add this folder
       </button>
     </div>
@@ -171,6 +181,13 @@
     color: #555;
   }
 
+  .error {
+    padding: 20px;
+    text-align: center;
+    font-size: 11px;
+    color: #f87171;
+  }
+
   .modal-footer {
     padding: 12px 20px;
     border-top: 1px solid #222;
@@ -205,5 +222,10 @@
 
   .btn-confirm:hover {
     background: #6ae896;
+  }
+
+  .btn-confirm:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 </style>
