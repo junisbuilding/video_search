@@ -16,32 +16,12 @@ def create_app(settings: Settings, *, startup: bool = True) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if startup:
-            from videosearch.models.bge import BgeTextEmbedder
-            from videosearch.models.llama_cpp_captioner import LlamaCppCaptioner
-            from videosearch.models.loader import resolve_gguf
-            from videosearch.models.siglip import SiglipEmbedder
-            from videosearch.search import Searcher
             from videosearch.storage.caption_embeddings import CaptionEmbeddingsRepo
             from videosearch.storage.db import Database
             from videosearch.storage.frame_embeddings import FrameEmbeddingsRepo
             from videosearch.storage.jobs import JobsQueue
             from videosearch.storage.library_folders import LibraryFoldersRepo
             from videosearch.storage.videos import VideosRepo
-            from videosearch.api.worker import IndexerWorker
-
-            if not settings.vlm_model or not settings.vlm_mmproj:
-                raise RuntimeError(
-                    "VS_VLM_MODEL and VS_VLM_MMPROJ must be set."
-                )
-
-            image_embedder = SiglipEmbedder(settings.siglip_model)
-            text_embedder = BgeTextEmbedder(settings.text_embedder)
-            vlm_path = resolve_gguf(settings.vlm_model, cache_dir=settings.models_dir)
-            mmproj_path = resolve_gguf(settings.vlm_mmproj, cache_dir=settings.models_dir)
-            captioner = LlamaCppCaptioner(
-                str(vlm_path), str(mmproj_path),
-                n_gpu_layers=settings.vlm_n_gpu_layers,
-            )
 
             db = Database(settings.data_dir)
             jobs_queue = JobsQueue(settings.data_dir / "jobs.db")
@@ -49,37 +29,55 @@ def create_app(settings: Settings, *, startup: bool = True) -> FastAPI:
             frames = FrameEmbeddingsRepo(db)
             captions = CaptionEmbeddingsRepo(db)
             folders = LibraryFoldersRepo(db)
-            searcher = Searcher(
-                frames=frames, captions=captions,
-                image_embedder=image_embedder, text_embedder=text_embedder,
-            )
 
             loop = asyncio.get_running_loop()
             broadcaster = JobBroadcaster(loop)
 
-            worker = IndexerWorker(
-                jobs=jobs_queue, videos=videos, frames=frames, captions=captions,
-                image_embedder=image_embedder, text_embedder=text_embedder,
-                captioner=captioner, work_dir=settings.data_dir / "work",
-                broadcaster=broadcaster, frame_fps=settings.frame_fps,
-                scene_detection=settings.scene_detection,
-            )
-            worker.start()
-
             app.state.settings = settings
-            app.state.searcher = searcher
             app.state.jobs_queue = jobs_queue
             app.state.videos_repo = videos
             app.state.frames_repo = frames
             app.state.captions_repo = captions
             app.state.library_folders_repo = folders
             app.state.broadcaster = broadcaster
-            app.state.worker = worker
+
+            worker = None
+            if settings.vlm_model and settings.vlm_mmproj:
+                from videosearch.models.bge import BgeTextEmbedder
+                from videosearch.models.llama_cpp_captioner import LlamaCppCaptioner
+                from videosearch.models.loader import resolve_gguf
+                from videosearch.models.siglip import SiglipEmbedder
+                from videosearch.search import Searcher
+                from videosearch.api.worker import IndexerWorker
+
+                image_embedder = SiglipEmbedder(settings.siglip_model)
+                text_embedder = BgeTextEmbedder(settings.text_embedder)
+                vlm_path = resolve_gguf(settings.vlm_model, cache_dir=settings.models_dir)
+                mmproj_path = resolve_gguf(settings.vlm_mmproj, cache_dir=settings.models_dir)
+                captioner = LlamaCppCaptioner(
+                    str(vlm_path), str(mmproj_path),
+                    n_gpu_layers=settings.vlm_n_gpu_layers,
+                )
+                searcher = Searcher(
+                    frames=frames, captions=captions,
+                    image_embedder=image_embedder, text_embedder=text_embedder,
+                )
+                worker = IndexerWorker(
+                    jobs=jobs_queue, videos=videos, frames=frames, captions=captions,
+                    image_embedder=image_embedder, text_embedder=text_embedder,
+                    captioner=captioner, work_dir=settings.data_dir / "work",
+                    broadcaster=broadcaster, frame_fps=settings.frame_fps,
+                    scene_detection=settings.scene_detection,
+                )
+                worker.start()
+                app.state.searcher = searcher
+                app.state.worker = worker
 
             yield
 
-            worker.stop()
-            worker.join(timeout=10)
+            if worker is not None:
+                worker.stop()
+                worker.join(timeout=10)
             jobs_queue.close()
         else:
             yield

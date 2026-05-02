@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from fastapi import HTTPException
 from starlette.requests import HTTPConnection
 
 from videosearch.api.worker import IndexerWorker
@@ -18,6 +19,11 @@ def get_settings(conn: HTTPConnection) -> Settings:
 
 
 def get_searcher(conn: HTTPConnection) -> Searcher:
+    if not hasattr(conn.app.state, "searcher"):
+        raise HTTPException(
+            status_code=503,
+            detail="Models not loaded. Set vlm_model and vlm_mmproj in Settings and restart.",
+        )
     return conn.app.state.searcher
 
 
