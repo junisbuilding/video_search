@@ -61,4 +61,12 @@ describe('connectJobsSocket', () => {
     mockWs.onerror?.();
     expect(mockWs.close).toHaveBeenCalled();
   });
+
+  it('stops reconnecting after disconnect is called', () => {
+    const disconnect = connectJobsSocket();
+    disconnect();
+    mockWs.onclose?.();
+    vi.advanceTimersByTime(3000);
+    expect(WebSocketSpy).toHaveBeenCalledTimes(1); // no reconnect after disconnect
+  });
 });

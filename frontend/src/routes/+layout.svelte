@@ -7,8 +7,13 @@
   let { children }: { children: Snippet } = $props();
 
   onMount(() => {
-    connectJobsSocket();
+    return connectJobsSocket();
   });
+
+  function isActive(pathname: string, href: string): boolean {
+    if (href === '/') return pathname === '/';
+    return pathname.startsWith(href);
+  }
 
   const navItems = [
     { label: 'Search', href: '/' },
@@ -29,7 +34,8 @@
         <a
           href={item.href}
           class="nav-link"
-          class:active={page.url.pathname === item.href}
+          class:active={isActive(page.url.pathname, item.href)}
+          aria-current={isActive(page.url.pathname, item.href) ? 'page' : undefined}
         >{item.label}</a>
       {/each}
     </div>
