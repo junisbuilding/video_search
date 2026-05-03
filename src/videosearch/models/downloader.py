@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import tqdm as tqdm_lib
 from huggingface_hub import hf_hub_download, snapshot_download, try_to_load_from_cache
 
-from videosearch.models.catalog import CATALOG, ModelEntry, find_by_id
+from videosearch.models.catalog import ModelEntry, find_by_id
 
 
 @dataclass
@@ -19,7 +18,7 @@ class DownloadProgress:
     model_id: str = ""
     downloaded_bytes: int = 0
     total_bytes: int = 0
-    error: Optional[str] = None
+    error: str | None = None
     complete: bool = False
 
 
@@ -63,7 +62,8 @@ class ModelDownloader:
             return False
         if self.is_cached(model_type, model_id):
             return False
-        assert self._queue is not None, "call start() before enqueue()"
+        if self._queue is None:
+            raise RuntimeError("call start() before enqueue()")
         await self._queue.put((model_type, model_id))
         return True
 

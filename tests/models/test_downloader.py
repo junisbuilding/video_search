@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -56,3 +55,12 @@ def test_is_cached_returns_false_for_unknown_model(downloader):
 
 def test_is_cached_returns_false_for_unknown_type(downloader):
     assert downloader.is_cached("unknown_type", "any-id") is False
+
+
+@pytest.mark.anyio
+async def test_enqueue_already_cached_skips(downloader):
+    await downloader.start()
+    with patch("videosearch.models.downloader.try_to_load_from_cache", return_value="/cached/config.json"):
+        queued = await downloader.enqueue("siglip", "siglip2-base")
+    assert queued is False
+    assert downloader.progress().active is False
