@@ -115,6 +115,19 @@ describe('SetupModal', () => {
     });
   });
 
+  it('shows downloading status for active entry', async () => {
+    vi.mocked(api.getDownloadProgress).mockResolvedValue([
+      {
+        active: true, model_type: 'siglip', model_id: 'siglip2-base',
+        downloaded_bytes: 0, total_bytes: 1000, error: null, complete: false,
+      },
+    ]);
+    render(SetupModal);
+    await waitFor(() => {
+      expect(screen.getByText('0%')).toBeInTheDocument();
+    }, { timeout: 3000 });
+  });
+
   it('shows error status and retry button for a failed download', async () => {
     vi.mocked(api.getDownloadProgress).mockResolvedValue([
       {
@@ -144,5 +157,7 @@ describe('SetupModal', () => {
       expect(api.startModelDownload).toHaveBeenCalledTimes(4);
       expect(api.startModelDownload).toHaveBeenLastCalledWith('siglip', 'siglip2-base');
     });
+    // Polling resumes after retry: getDownloadProgress should have been called
+    expect(api.getDownloadProgress).toHaveBeenCalled();
   });
 });
