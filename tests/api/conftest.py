@@ -63,7 +63,7 @@ def mock_downloader():
     m = MagicMock()
     m.is_cached.return_value = False
     m.enqueue = AsyncMock(return_value=True)
-    m.progress.return_value = DownloadProgress()
+    m.progress.return_value = []
     return m
 
 

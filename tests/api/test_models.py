@@ -55,14 +55,18 @@ def test_catalog_first_run_false_when_all_types_cached(client, mock_downloader):
     assert r.json()["first_run"] is False
 
 
-def test_download_progress_returns_progress(client, mock_downloader):
-    mock_downloader.progress.return_value = DownloadProgress(
-        active=True, model_type="siglip", model_id="siglip2-base",
-        downloaded_bytes=100, total_bytes=1000,
-    )
+def test_download_progress_returns_list(client, mock_downloader):
+    mock_downloader.progress.return_value = [
+        DownloadProgress(
+            active=True, model_type="siglip", model_id="siglip2-base",
+            downloaded_bytes=100, total_bytes=1000,
+        )
+    ]
     r = client.get("/api/models/download/progress")
     assert r.status_code == 200
     data = r.json()
-    assert data["active"] is True
-    assert data["downloaded_bytes"] == 100
-    assert data["total_bytes"] == 1000
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["active"] is True
+    assert data[0]["downloaded_bytes"] == 100
+    assert data[0]["total_bytes"] == 1000

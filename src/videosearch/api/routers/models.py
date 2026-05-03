@@ -118,8 +118,8 @@ async def start_download(
     return DownloadResponse(queued=True)
 
 
-@router.get("/models/download/progress", response_model=DownloadProgress)
+@router.get("/models/download/progress", response_model=list[DownloadProgress])
 async def get_progress(
     downloader: ModelDownloader = Depends(get_downloader),
-) -> DownloadProgress:
+) -> list[DownloadProgress]:
     return downloader.progress()
