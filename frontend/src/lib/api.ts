@@ -1,7 +1,7 @@
 import type {
   DownloadProgress, FsListResponse, HealthResponse, IngestResponse, JobsListResponse,
   LibraryResponse, ModelCatalogResponse, RegisterFolderResponse, RetryResponse,
-  SearchResponse, SettingsPatch,
+  SearchResponse, SettingsPatch, SettingsResponse,
 } from './types';
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -70,11 +70,11 @@ export async function listFs(path?: string): Promise<FsListResponse> {
   return apiFetch(url);
 }
 
-export async function getSettings(): Promise<Record<string, unknown>> {
+export async function getSettings(): Promise<SettingsResponse> {
   return apiFetch('/api/settings');
 }
 
-export async function patchSettings(patch: Partial<SettingsPatch>): Promise<Record<string, unknown>> {
+export async function patchSettings(patch: Partial<SettingsPatch>): Promise<SettingsResponse> {
   return apiFetch('/api/settings', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

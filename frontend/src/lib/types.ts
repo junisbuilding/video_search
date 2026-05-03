@@ -89,6 +89,10 @@ export interface IngestResponse {
   enqueued: string[];
 }
 
+export interface SettingsResponse {
+  hf_token: string | null;
+}
+
 export interface SettingsPatch {
   frame_fps?: number | null;
   scene_detection?: boolean | null;

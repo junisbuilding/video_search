@@ -106,7 +106,8 @@ describe('SetupModal', () => {
     render(SetupModal);
     await waitFor(() => screen.getByPlaceholderText('hf_...'));
     const input = screen.getByPlaceholderText('hf_...');
-    fireEvent.input(input, { target: { value: 'hf_mytoken' } });
+    input.value = 'hf_mytoken';
+    fireEvent.input(input);
     fireEvent.click(screen.getByText('Continue'));
     await waitFor(() => {
       expect(api.patchSettings).toHaveBeenCalledWith({ hf_token: 'hf_mytoken' });

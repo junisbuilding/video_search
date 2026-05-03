@@ -93,7 +93,7 @@
     siglipEntries = catalog.siglip;
     textEntries = catalog.text_embedder;
 
-    if ((settings as { hf_token: string | null }).hf_token !== null) {
+    if (settings.hf_token !== null) {
       await beginDownloads();
     }
     // else: stay on token step, wait for user action
