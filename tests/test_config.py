@@ -35,3 +35,22 @@ def test_env_overrides_toml(tmp_path, monkeypatch):
     monkeypatch.setenv("VS_PORT", "9999")
     s = load_config(cfg)
     assert s.port == 9999
+
+
+def test_hf_token_defaults_to_none():
+    s = load_config()
+    assert s.hf_token is None
+
+
+def test_hf_token_from_hf_token_env(monkeypatch):
+    monkeypatch.setenv("HF_TOKEN", "hf_abc")
+    monkeypatch.delenv("VS_HF_TOKEN", raising=False)
+    s = load_config()
+    assert s.hf_token == "hf_abc"
+
+
+def test_vs_hf_token_overrides_hf_token(monkeypatch):
+    monkeypatch.setenv("HF_TOKEN", "hf_from_bare")
+    monkeypatch.setenv("VS_HF_TOKEN", "hf_from_vs")
+    s = load_config()
+    assert s.hf_token == "hf_from_vs"

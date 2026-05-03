@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     frame_fps: float = 1.0
     scene_detection: bool = True
     port: int = 8083
+    hf_token: str | None = None
 
 
 def load_config(toml_path: Path | None = None) -> Settings:
@@ -53,6 +54,10 @@ def load_config(toml_path: Path | None = None) -> Settings:
         env_key = f"VS_{field_name.upper()}"
         if env_key in os.environ:
             env_data[field_name] = os.environ[env_key]
+
+    # Read bare HF_TOKEN as fallback for hf_token (VS_HF_TOKEN wins if set)
+    if "HF_TOKEN" in os.environ and "hf_token" not in env_data:
+        env_data["hf_token"] = os.environ["HF_TOKEN"]
 
     # Merge: file_data < env_data (env vars win)
     merged_data = {**file_data, **env_data}
