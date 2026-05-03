@@ -98,6 +98,7 @@ export interface SettingsPatch {
   vlm_model?: string | null;
   vlm_mmproj?: string | null;
   vlm_n_gpu_layers?: number | null;
+  hf_token?: string | null;
 }
 
 export interface ModelCatalogEntry {

@@ -12,9 +12,18 @@ from videosearch.config import Settings
 router = APIRouter()
 
 
-def _settings_to_toml_dict(s: Settings) -> dict:
+def _settings_to_dict(s: Settings, include_none_hf_token: bool = False) -> dict:
+    """Convert settings to dict for API or TOML output.
+
+    Args:
+        s: Settings object
+        include_none_hf_token: If True, include hf_token even when None (for API responses).
+                              If False, skip None values (for TOML output).
+    """
     result: dict = {}
     for key, value in s.model_dump().items():
+        if key == "hf_token":
+            continue  # handled explicitly below
         if value is None:
             continue
         if isinstance(value, Path):
@@ -23,6 +32,11 @@ def _settings_to_toml_dict(s: Settings) -> dict:
             result[key] = [str(item) if isinstance(item, Path) else item for item in value]
         else:
             result[key] = value
+
+    # Handle hf_token: always include in API response, skip in TOML if None
+    if include_none_hf_token or s.hf_token is not None:
+        result["hf_token"] = s.hf_token
+
     return result
 
 
@@ -30,7 +44,7 @@ def _settings_to_toml_dict(s: Settings) -> dict:
 async def get_settings_endpoint(
     settings: Settings = Depends(get_settings),
 ) -> dict:
-    return _settings_to_toml_dict(settings)
+    return _settings_to_dict(settings, include_none_hf_token=True)
 
 
 class SettingsPatch(BaseModel, extra="ignore"):
@@ -42,6 +56,7 @@ class SettingsPatch(BaseModel, extra="ignore"):
     vlm_model: str | None = None
     vlm_mmproj: str | None = None
     vlm_n_gpu_layers: int | None = None
+    hf_token: str | None = None
 
 
 @router.patch("/settings")
@@ -58,7 +73,7 @@ async def patch_settings(
     config_path = Path(new_settings.data_dir) / "config.toml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     with open(config_path, "wb") as f:
-        tomli_w.dump(_settings_to_toml_dict(new_settings), f)
+        tomli_w.dump(_settings_to_dict(new_settings, include_none_hf_token=False), f)
 
     request.app.state.settings = new_settings
-    return _settings_to_toml_dict(new_settings)
+    return _settings_to_dict(new_settings, include_none_hf_token=True)
