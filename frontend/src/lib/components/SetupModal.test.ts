@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/svelte';
+import { render, screen, waitFor, fireEvent } from '@testing-library/svelte';
 import SetupModal from './SetupModal.svelte';
 import * as api from '$lib/api';
 
@@ -27,9 +27,12 @@ const idleProgress = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(api.startModelDownload).mockResolvedValue({ queued: true });
   vi.mocked(api.getDownloadProgress).mockResolvedValue(idleProgress);
   vi.mocked(api.getModelCatalog).mockResolvedValue(catalogWithFirstRun);
+  vi.mocked(api.getSettings).mockResolvedValue({ hf_token: 'already-set' });
+  vi.mocked(api.patchSettings).mockResolvedValue({});
   localStorage.clear();
 });
 
@@ -39,7 +42,7 @@ describe('SetupModal', () => {
     await waitFor(() => expect(screen.getByText(/Welcome to Videosearch/i)).toBeInTheDocument());
   });
 
-  it('shows all three model labels', async () => {
+  it('shows all three model labels when token already configured', async () => {
     render(SetupModal);
     await waitFor(() => {
       expect(screen.getByText(/Vision model/i)).toBeInTheDocument();
@@ -48,7 +51,7 @@ describe('SetupModal', () => {
     });
   });
 
-  it('calls startModelDownload for each uncached default on mount', async () => {
+  it('calls startModelDownload for each uncached default when token already configured', async () => {
     render(SetupModal);
     await waitFor(() => {
       expect(api.startModelDownload).toHaveBeenCalledWith('vision', 'moondream2');
@@ -67,5 +70,47 @@ describe('SetupModal', () => {
     await waitFor(() => {
       expect(localStorage.getItem('setup_seen')).toBe('1');
     }, { timeout: 3000 });
+  });
+
+  it('shows token input step when hf_token is null', async () => {
+    vi.mocked(api.getSettings).mockResolvedValue({ hf_token: null });
+    render(SetupModal);
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('hf_...')).toBeInTheDocument();
+    });
+    expect(api.startModelDownload).not.toHaveBeenCalled();
+  });
+
+  it('skips token step and starts downloads when hf_token is already set', async () => {
+    vi.mocked(api.getSettings).mockResolvedValue({ hf_token: 'hf_existing' });
+    render(SetupModal);
+    await waitFor(() => {
+      expect(api.startModelDownload).toHaveBeenCalled();
+    });
+    expect(screen.queryByPlaceholderText('hf_...')).not.toBeInTheDocument();
+  });
+
+  it('Skip button starts downloads without calling patchSettings', async () => {
+    vi.mocked(api.getSettings).mockResolvedValue({ hf_token: null });
+    render(SetupModal);
+    await waitFor(() => screen.getByText('Skip'));
+    fireEvent.click(screen.getByText('Skip'));
+    await waitFor(() => {
+      expect(api.startModelDownload).toHaveBeenCalled();
+    });
+    expect(api.patchSettings).not.toHaveBeenCalled();
+  });
+
+  it('Continue button saves token and starts downloads', async () => {
+    vi.mocked(api.getSettings).mockResolvedValue({ hf_token: null });
+    render(SetupModal);
+    await waitFor(() => screen.getByPlaceholderText('hf_...'));
+    const input = screen.getByPlaceholderText('hf_...');
+    fireEvent.input(input, { target: { value: 'hf_mytoken' } });
+    fireEvent.click(screen.getByText('Continue'));
+    await waitFor(() => {
+      expect(api.patchSettings).toHaveBeenCalledWith({ hf_token: 'hf_mytoken' });
+      expect(api.startModelDownload).toHaveBeenCalled();
+    });
   });
 });
