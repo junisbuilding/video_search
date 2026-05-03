@@ -56,7 +56,7 @@
     pollInterval = setInterval(async () => {
       progresses = await getDownloadProgress();
       await refreshCatalog();
-      if (progresses.length > 0 && progresses.every(p => !p.active)) stopPolling();
+      if (progresses.length > 0 && progresses.every(p => p.complete || !!p.error)) stopPolling();
     }, 1000);
   }
 
