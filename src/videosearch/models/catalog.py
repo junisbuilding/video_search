@@ -14,8 +14,8 @@ class ModelEntry:
     default: bool = False
 
 
-CATALOG: dict[str, list[ModelEntry]] = {
-    "vision": [
+CATALOG: dict[str, tuple[ModelEntry, ...]] = {
+    "vision": (
         ModelEntry(
             id="moondream2",
             label="moondream2",
@@ -41,8 +41,8 @@ CATALOG: dict[str, list[ModelEntry]] = {
             vlm_model="mys/ggml_llava-v1.5-13b::ggml-model-q4_k.gguf",
             vlm_mmproj="mys/ggml_llava-v1.5-13b::mmproj-model-f16.gguf",
         ),
-    ],
-    "siglip": [
+    ),
+    "siglip": (
         ModelEntry(
             id="siglip2-base",
             label="SigLIP Base",
@@ -68,8 +68,8 @@ CATALOG: dict[str, list[ModelEntry]] = {
             vlm_model=None,
             vlm_mmproj=None,
         ),
-    ],
-    "text_embedder": [
+    ),
+    "text_embedder": (
         ModelEntry(
             id="bge-small-en",
             label="BGE Small (English)",
@@ -103,19 +103,21 @@ CATALOG: dict[str, list[ModelEntry]] = {
             vlm_model=None,
             vlm_mmproj=None,
         ),
-    ],
+    ),
 }
 
 
 def find_by_id(model_type: str, model_id: str) -> ModelEntry | None:
-    for entry in CATALOG.get(model_type, []):
+    """Return the entry with the given id, or None if not found (including unknown type)."""
+    for entry in CATALOG.get(model_type, ()):
         if entry.id == model_id:
             return entry
     return None
 
 
 def get_default(model_type: str) -> ModelEntry:
-    entries = CATALOG[model_type]  # raises KeyError for unknown type
+    """Return the default entry for a model type. Raises KeyError for unknown type."""
+    entries = CATALOG[model_type]  # raises KeyError for unknown type — intentional per spec
     for entry in entries:
         if entry.default:
             return entry
