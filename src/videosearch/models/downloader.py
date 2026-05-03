@@ -23,21 +23,18 @@ class DownloadProgress:
 
 
 class ModelDownloader:
-    """Runs one model download at a time in an asyncio executor. Thread-safe progress."""
+    """Downloads models concurrently — one asyncio task per model. Thread-safe progress."""
 
     def __init__(self, models_dir: Path, token: str | None = None) -> None:
         self._models_dir = models_dir
         self._token = token
-        self._lock = threading.Lock()
-        self._progress = DownloadProgress()
-        self._bytes: dict[str, int] = {"downloaded": 0, "total": 0}
-        self._queue: asyncio.Queue | None = None
-        self._task: asyncio.Task | None = None
+        self._tasks: dict[tuple[str, str], asyncio.Task] = {}
+        self._progress: dict[tuple[str, str], DownloadProgress] = {}
+        self._bytes: dict[tuple[str, str], dict[str, int]] = {}
+        self._locks: dict[tuple[str, str], threading.Lock] = {}
 
     async def start(self) -> None:
-        """Call once from an asyncio context (e.g. lifespan) to start the drain loop."""
-        self._queue = asyncio.Queue()
-        self._task = asyncio.create_task(self._drain())
+        """No-op — kept for interface compatibility with lifespan caller."""
 
     def is_cached(self, model_type: str, model_id: str) -> bool:
         entry = find_by_id(model_type, model_id)
@@ -58,48 +55,51 @@ class ModelDownloader:
         return m is not None and p is not None
 
     async def enqueue(self, model_type: str, model_id: str) -> bool:
-        """Returns True if queued, False if already cached or unknown."""
+        """Start a download task. Returns False if unknown, cached, or already running."""
         if find_by_id(model_type, model_id) is None:
             return False
         if self.is_cached(model_type, model_id):
             return False
-        if self._queue is None:
-            raise RuntimeError("call start() before enqueue()")
-        await self._queue.put((model_type, model_id))
+        key = (model_type, model_id)
+        task = self._tasks.get(key)
+        if task is not None and not task.done():
+            return False
+        self._tasks[key] = asyncio.create_task(self._download_one(model_type, model_id))
         return True
 
-    def progress(self) -> DownloadProgress:
-        with self._lock:
-            return DownloadProgress(
-                active=self._progress.active,
-                model_type=self._progress.model_type,
-                model_id=self._progress.model_id,
-                downloaded_bytes=self._bytes["downloaded"],
-                total_bytes=self._bytes["total"],
-                error=self._progress.error,
-                complete=self._progress.complete,
-            )
-
-    async def _drain(self) -> None:
-        assert self._queue is not None
-        while True:
-            model_type, model_id = await self._queue.get()
-            await self._download_one(model_type, model_id)
-            self._queue.task_done()
+    def progress(self) -> list[DownloadProgress]:
+        result = []
+        for key, dp in self._progress.items():
+            lock = self._locks[key]
+            bytes_state = self._bytes[key]
+            with lock:
+                result.append(DownloadProgress(
+                    active=dp.active,
+                    model_type=dp.model_type,
+                    model_id=dp.model_id,
+                    downloaded_bytes=bytes_state["downloaded"],
+                    total_bytes=bytes_state["total"],
+                    error=dp.error,
+                    complete=dp.complete,
+                ))
+        return result
 
     async def _download_one(self, model_type: str, model_id: str) -> None:
-        with self._lock:
-            self._progress = DownloadProgress(
-                active=True, model_type=model_type, model_id=model_id
-            )
-            self._bytes = {"downloaded": 0, "total": 0}
+        key = (model_type, model_id)
+        lock = threading.Lock()
+        bytes_state: dict[str, int] = {"downloaded": 0, "total": 0}
+        self._locks[key] = lock
+        self._bytes[key] = bytes_state
+        self._progress[key] = DownloadProgress(
+            active=True, model_type=model_type, model_id=model_id
+        )
 
         entry = find_by_id(model_type, model_id)
         assert entry is not None
 
         try:
             loop = asyncio.get_running_loop()
-            tqdm_cls = self._make_tqdm_class()
+            tqdm_cls = self._make_tqdm_class(bytes_state, lock)
 
             if model_type == "vision":
                 assert entry.vlm_model and entry.vlm_mmproj
@@ -127,22 +127,23 @@ class ModelDownloader:
                 assert entry.hf_repo is not None
                 await loop.run_in_executor(
                     None,
-                    lambda: snapshot_download(entry.hf_repo, tqdm_class=tqdm_cls, token=self._token),
+                    lambda: snapshot_download(
+                        entry.hf_repo,
+                        tqdm_class=tqdm_cls,
+                        token=self._token,
+                    ),
                 )
 
-            with self._lock:
-                self._progress.active = False
-                self._progress.complete = True
+            with lock:
+                self._progress[key].active = False
+                self._progress[key].complete = True
 
         except Exception as exc:
-            with self._lock:
-                self._progress.active = False
-                self._progress.error = str(exc)
+            with lock:
+                self._progress[key].active = False
+                self._progress[key].error = str(exc)
 
-    def _make_tqdm_class(self):
-        bytes_state = self._bytes
-        lock = self._lock
-
+    def _make_tqdm_class(self, bytes_state: dict[str, int], lock: threading.Lock):
         class _ProgressTqdm(tqdm_lib.tqdm):
             def update(self, n=1):
                 super().update(n)
