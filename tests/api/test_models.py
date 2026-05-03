@@ -48,6 +48,13 @@ def test_download_already_cached_returns_not_queued(client, mock_downloader):
     assert r.json()["queued"] is False
 
 
+def test_catalog_first_run_false_when_all_types_cached(client, mock_downloader):
+    mock_downloader.is_cached.return_value = True
+    r = client.get("/api/models/catalog")
+    assert r.status_code == 200
+    assert r.json()["first_run"] is False
+
+
 def test_download_progress_returns_progress(client, mock_downloader):
     mock_downloader.progress.return_value = DownloadProgress(
         active=True, model_type="siglip", model_id="siglip2-base",

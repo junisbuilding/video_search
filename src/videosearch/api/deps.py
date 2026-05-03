@@ -6,6 +6,7 @@ from starlette.requests import HTTPConnection
 from videosearch.api.worker import IndexerWorker
 from videosearch.api.ws import JobBroadcaster
 from videosearch.config import Settings
+from videosearch.models.downloader import ModelDownloader
 from videosearch.search import Searcher
 from videosearch.storage.caption_embeddings import CaptionEmbeddingsRepo
 from videosearch.storage.frame_embeddings import FrameEmbeddingsRepo
@@ -55,5 +56,5 @@ def get_worker(conn: HTTPConnection) -> IndexerWorker:
     return conn.app.state.worker
 
 
-def get_downloader(conn: HTTPConnection) -> "ModelDownloader":  # noqa: F821
+def get_downloader(conn: HTTPConnection) -> ModelDownloader:
     return conn.app.state.downloader
