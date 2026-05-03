@@ -115,7 +115,8 @@ def find_by_id(model_type: str, model_id: str) -> ModelEntry | None:
 
 
 def get_default(model_type: str) -> ModelEntry:
-    for entry in CATALOG[model_type]:
+    entries = CATALOG[model_type]  # raises KeyError for unknown type
+    for entry in entries:
         if entry.default:
             return entry
-    raise ValueError(f"No default for {model_type}")
+    raise ValueError(f"No default entry configured for model type '{model_type}'")
