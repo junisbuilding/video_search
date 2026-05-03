@@ -1,0 +1,1 @@
+import{w as a}from"./BMHEcAnI.js";const u=a(null),c=a(null),i=a([]);function e(s,n){const o=s.findIndex(r=>r.id===n.id);if(o===-1)return[n,...s];const t=[...s];return t[o]={...t[o],...n},t}export{c as a,i as j,u as s,e as u};
