@@ -11,7 +11,7 @@
   let visionEntries = $state<ModelCatalogEntry[]>([]);
   let siglipEntries = $state<ModelCatalogEntry[]>([]);
   let textEntries = $state<ModelCatalogEntry[]>([]);
-  let progress = $state<DownloadProgress | null>(null);
+  let progresses = $state<DownloadProgress[]>([]);
   let pollInterval: ReturnType<typeof setInterval> | null = null;
 
   type ModelSection = { type: string; label: string; entry: ModelCatalogEntry | undefined };
@@ -22,15 +22,22 @@
     { type: 'text_embedder', label: 'Search model',        entry: textEntries.find(e => e.default) },
   ]);
 
-  function sectionStatus(section: ModelSection): 'cached' | 'downloading' | 'queued' {
+  function sectionProgress(section: ModelSection): DownloadProgress | undefined {
+    return progresses.find(p => p.model_type === section.type);
+  }
+
+  function sectionStatus(section: ModelSection): 'cached' | 'downloading' | 'error' | 'queued' {
     if (section.entry?.cached) return 'cached';
-    if (progress?.active && progress.model_type === section.type) return 'downloading';
+    const p = sectionProgress(section);
+    if (p?.error) return 'error';
+    if (p?.active) return 'downloading';
     return 'queued';
   }
 
-  function pct(): number {
-    if (!progress || !progress.total_bytes) return 0;
-    return Math.round((progress.downloaded_bytes / progress.total_bytes) * 100);
+  function pct(section: ModelSection): number {
+    const p = sectionProgress(section);
+    if (!p || !p.total_bytes) return 0;
+    return Math.round((p.downloaded_bytes / p.total_bytes) * 100);
   }
 
   async function refreshCatalog() {
@@ -47,10 +54,9 @@
 
   function startPolling() {
     pollInterval = setInterval(async () => {
-      progress = await getDownloadProgress();
-      if (progress.complete || !progress.active) {
-        await refreshCatalog();
-      }
+      progresses = await getDownloadProgress();
+      await refreshCatalog();
+      if (progresses.length > 0 && progresses.every(p => !p.active)) stopPolling();
     }, 1000);
   }
 
@@ -87,6 +93,13 @@
     await beginDownloads();
   }
 
+  async function retryDownload(section: ModelSection) {
+    if (section.entry) {
+      await startModelDownload(section.type, section.entry.id);
+      if (!pollInterval) startPolling();
+    }
+  }
+
   onMount(async () => {
     const [catalog, settings] = await Promise.all([getModelCatalog(), getSettings()]);
     visionEntries = catalog.vision;
@@ -96,7 +109,6 @@
     if (settings.hf_token !== null) {
       await beginDownloads();
     }
-    // else: stay on token step, wait for user action
   });
 
   onDestroy(stopPolling);
@@ -141,14 +153,17 @@
                 {#if status === 'cached'}
                   <span class="row-status cached">✓</span>
                 {:else if status === 'downloading'}
-                  <span class="row-status downloading">{pct()}%</span>
+                  <span class="row-status downloading">{pct(section)}%</span>
+                {:else if status === 'error'}
+                  <span class="row-status error">failed</span>
+                  <button class="retry-btn" type="button" onclick={() => retryDownload(section)}>Retry</button>
                 {:else}
                   <span class="row-status queued">queued</span>
                 {/if}
               </div>
               <div class="bar-track">
                 {#if status === 'downloading'}
-                  <div class="bar-fill" style="width: {pct()}%"></div>
+                  <div class="bar-fill" style="width: {pct(section)}%"></div>
                 {:else if status === 'cached'}
                   <div class="bar-fill full"></div>
                 {:else}
@@ -260,7 +275,6 @@
     gap: 14px;
     margin-bottom: 20px;
   }
-  .model-row {}
   .row-header {
     display: flex;
     align-items: baseline;
@@ -281,6 +295,16 @@
   .row-status.cached { color: #4ade80; }
   .row-status.downloading { color: #4ade80; }
   .row-status.queued { color: #555; }
+  .row-status.error { color: #f87171; }
+  .retry-btn {
+    background: none;
+    border: 1px solid #444;
+    border-radius: 3px;
+    font-size: 9px;
+    color: #f87171;
+    cursor: pointer;
+    padding: 2px 6px;
+  }
   .bar-track {
     background: #2a2a2a;
     border-radius: 2px;

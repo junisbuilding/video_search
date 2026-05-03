@@ -94,6 +94,6 @@ export async function startModelDownload(model_type: string, model_id: string): 
   });
 }
 
-export async function getDownloadProgress(): Promise<DownloadProgress> {
+export async function getDownloadProgress(): Promise<DownloadProgress[]> {
   return apiFetch('/api/models/download/progress');
 }

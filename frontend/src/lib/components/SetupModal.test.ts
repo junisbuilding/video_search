@@ -29,7 +29,7 @@ const idleProgress = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.startModelDownload).mockResolvedValue({ queued: true });
-  vi.mocked(api.getDownloadProgress).mockResolvedValue(idleProgress);
+  vi.mocked(api.getDownloadProgress).mockResolvedValue([]);
   vi.mocked(api.getModelCatalog).mockResolvedValue(catalogWithFirstRun);
   vi.mocked(api.getSettings).mockResolvedValue({ hf_token: 'already-set' });
   vi.mocked(api.patchSettings).mockResolvedValue({ hf_token: null });
@@ -64,7 +64,7 @@ describe('SetupModal', () => {
     vi.mocked(api.getModelCatalog)
       .mockResolvedValueOnce(catalogWithFirstRun)
       .mockResolvedValue(catalogAllCached);
-    vi.mocked(api.getDownloadProgress).mockResolvedValue({ ...idleProgress, complete: true });
+    vi.mocked(api.getDownloadProgress).mockResolvedValue([{ ...idleProgress, complete: true }]);
 
     render(SetupModal);
     await waitFor(() => {
@@ -112,6 +112,37 @@ describe('SetupModal', () => {
     await waitFor(() => {
       expect(api.patchSettings).toHaveBeenCalledWith({ hf_token: 'hf_mytoken' });
       expect(api.startModelDownload).toHaveBeenCalled();
+    });
+  });
+
+  it('shows error status and retry button for a failed download', async () => {
+    vi.mocked(api.getDownloadProgress).mockResolvedValue([
+      {
+        active: false, model_type: 'siglip', model_id: 'siglip2-base',
+        downloaded_bytes: 0, total_bytes: 0, error: 'network error', complete: false,
+      },
+    ]);
+    render(SetupModal);
+    await waitFor(() => {
+      expect(screen.getByText('failed')).toBeInTheDocument();
+      expect(screen.getByText('Retry')).toBeInTheDocument();
+    }, { timeout: 3000 });
+  });
+
+  it('Retry button calls startModelDownload with the failed model', async () => {
+    vi.mocked(api.getDownloadProgress).mockResolvedValue([
+      {
+        active: false, model_type: 'siglip', model_id: 'siglip2-base',
+        downloaded_bytes: 0, total_bytes: 0, error: 'network error', complete: false,
+      },
+    ]);
+    render(SetupModal);
+    await waitFor(() => screen.getByText('Retry'), { timeout: 3000 });
+    fireEvent.click(screen.getByText('Retry'));
+    await waitFor(() => {
+      // 3 calls from beginDownloads + 1 from retry = 4 total
+      expect(api.startModelDownload).toHaveBeenCalledTimes(4);
+      expect(api.startModelDownload).toHaveBeenLastCalledWith('siglip', 'siglip2-base');
     });
   });
 });
