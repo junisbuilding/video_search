@@ -77,7 +77,7 @@ async def test_token_passed_to_hf_hub_download(tmp_path, monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_concurrent_downloads_create_separate_tasks(tmp_path, monkeypatch):
+async def test_enqueue_creates_separate_tasks_per_model(tmp_path, monkeypatch):
     """enqueue() fires an independent task per model — no serial blocking."""
     def fake_hf_hub_download(*args, **kwargs):
         return str(tmp_path / "fake.gguf")

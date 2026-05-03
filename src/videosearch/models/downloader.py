@@ -105,22 +105,24 @@ class ModelDownloader:
                 assert entry.vlm_model and entry.vlm_mmproj
                 repo1, file1 = entry.vlm_model.split("::", 1)
                 repo2, file2 = entry.vlm_mmproj.split("::", 1)
-                await loop.run_in_executor(
-                    None,
-                    lambda: hf_hub_download(
-                        repo1, file1,
-                        cache_dir=str(self._models_dir),
-                        tqdm_class=tqdm_cls,
-                        token=self._token,
+                await asyncio.gather(
+                    loop.run_in_executor(
+                        None,
+                        lambda: hf_hub_download(
+                            repo1, file1,
+                            cache_dir=str(self._models_dir),
+                            tqdm_class=tqdm_cls,
+                            token=self._token,
+                        ),
                     ),
-                )
-                await loop.run_in_executor(
-                    None,
-                    lambda: hf_hub_download(
-                        repo2, file2,
-                        cache_dir=str(self._models_dir),
-                        tqdm_class=tqdm_cls,
-                        token=self._token,
+                    loop.run_in_executor(
+                        None,
+                        lambda: hf_hub_download(
+                            repo2, file2,
+                            cache_dir=str(self._models_dir),
+                            tqdm_class=tqdm_cls,
+                            token=self._token,
+                        ),
                     ),
                 )
             else:
