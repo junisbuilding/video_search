@@ -99,3 +99,29 @@ export interface SettingsPatch {
   vlm_mmproj?: string | null;
   vlm_n_gpu_layers?: number | null;
 }
+
+export interface ModelCatalogEntry {
+  id: string;
+  label: string;
+  size_label: string;
+  cached: boolean;
+  default: boolean;
+}
+
+export interface ModelCatalogResponse {
+  first_run: boolean;
+  active_models: { vision: string; siglip: string; text_embedder: string };
+  vision: ModelCatalogEntry[];
+  siglip: ModelCatalogEntry[];
+  text_embedder: ModelCatalogEntry[];
+}
+
+export interface DownloadProgress {
+  active: boolean;
+  model_type: string;
+  model_id: string;
+  downloaded_bytes: number;
+  total_bytes: number;
+  error: string | null;
+  complete: boolean;
+}

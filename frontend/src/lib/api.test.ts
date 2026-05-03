@@ -3,6 +3,7 @@ import {
   search, getHealth, getLibrary, addFolder, deleteFolder,
   rescanFolder, getJobs, retryJob, revealVideo, listFs,
   getSettings, patchSettings,
+  getModelCatalog, startModelDownload, getDownloadProgress,
 } from './api';
 
 function mockFetch(body: unknown, status = 200) {
@@ -141,5 +142,42 @@ describe('error handling', () => {
   it('throws on non-ok response', async () => {
     vi.stubGlobal('fetch', mockFetch({ detail: 'not found' }, 404));
     await expect(getHealth()).rejects.toThrow();
+  });
+});
+
+describe('models API', () => {
+  it('getModelCatalog fetches /api/models/catalog', async () => {
+    const mockCatalog = {
+      first_run: false,
+      active_models: { vision: 'moondream2', siglip: 'siglip2-base', text_embedder: 'bge-small-en' },
+      vision: [{ id: 'moondream2', label: 'moondream2', size_label: '~2 GB', cached: true, default: true }],
+      siglip: [],
+      text_embedder: [],
+    };
+    vi.stubGlobal('fetch', mockFetch(mockCatalog));
+    const result = await getModelCatalog();
+    expect(fetch).toHaveBeenCalledWith('/api/models/catalog', undefined);
+    expect(result.first_run).toBe(false);
+    expect(result.vision[0].id).toBe('moondream2');
+  });
+
+  it('startModelDownload POSTs to /api/models/download', async () => {
+    vi.stubGlobal('fetch', mockFetch({ queued: true }));
+    await startModelDownload('siglip', 'siglip2-base');
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/models/download',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('getDownloadProgress fetches /api/models/download/progress', async () => {
+    const mockProgress = {
+      active: true, model_type: 'vision', model_id: 'moondream2',
+      downloaded_bytes: 500, total_bytes: 2000, error: null, complete: false,
+    };
+    vi.stubGlobal('fetch', mockFetch(mockProgress));
+    const result = await getDownloadProgress();
+    expect(result.active).toBe(true);
+    expect(result.downloaded_bytes).toBe(500);
   });
 });

@@ -1,6 +1,6 @@
 import type {
-  FsListResponse, HealthResponse, IngestResponse, JobsListResponse,
-  LibraryResponse, RegisterFolderResponse, RetryResponse,
+  DownloadProgress, FsListResponse, HealthResponse, IngestResponse, JobsListResponse,
+  LibraryResponse, ModelCatalogResponse, RegisterFolderResponse, RetryResponse,
   SearchResponse, SettingsPatch,
 } from './types';
 
@@ -80,4 +80,20 @@ export async function patchSettings(patch: Partial<SettingsPatch>): Promise<Reco
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
   });
+}
+
+export async function getModelCatalog(): Promise<ModelCatalogResponse> {
+  return apiFetch('/api/models/catalog');
+}
+
+export async function startModelDownload(model_type: string, model_id: string): Promise<{ queued: boolean; reason?: string }> {
+  return apiFetch('/api/models/download', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_type, model_id }),
+  });
+}
+
+export async function getDownloadProgress(): Promise<DownloadProgress> {
+  return apiFetch('/api/models/download/progress');
 }
