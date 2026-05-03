@@ -97,7 +97,7 @@ class ModelDownloader:
         assert entry is not None
 
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             tqdm_cls = self._make_tqdm_class()
 
             if model_type == "vision":

@@ -34,7 +34,7 @@ def test_is_cached_returns_true_for_hf_model_when_config_present(downloader):
         assert downloader.is_cached("siglip", "siglip2-base") is True
 
 
-def test_is_cached_vision_requires_both_files(downloader, tmp_path):
+def test_is_cached_vision_requires_both_files(downloader):
     # Only model cached, mmproj not — should return False
     def side_effect(repo_id, filename, **kwargs):
         if "mmproj" in filename:
