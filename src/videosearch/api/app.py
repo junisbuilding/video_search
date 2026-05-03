@@ -24,7 +24,7 @@ def create_app(settings: Settings, *, startup: bool = True) -> FastAPI:
             from videosearch.storage.library_folders import LibraryFoldersRepo
             from videosearch.storage.videos import VideosRepo
 
-            downloader = ModelDownloader(settings.models_dir)
+            downloader = ModelDownloader(settings.models_dir, token=settings.hf_token)
             await downloader.start()
 
             db = Database(settings.data_dir)

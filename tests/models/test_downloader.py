@@ -64,3 +64,20 @@ async def test_enqueue_already_cached_skips(downloader):
         queued = await downloader.enqueue("siglip", "siglip2-base")
     assert queued is False
     assert downloader.progress().active is False
+
+
+@pytest.mark.anyio
+async def test_token_passed_to_hf_hub_download(tmp_path, monkeypatch):
+    captured: list[dict] = []
+
+    def fake_hf_hub_download(*args, **kwargs):
+        captured.append(kwargs)
+        return str(tmp_path / "fake.gguf")
+
+    monkeypatch.setattr("videosearch.models.downloader.hf_hub_download", fake_hf_hub_download)
+
+    downloader = ModelDownloader(tmp_path, token="hf_test_token")
+    await downloader.start()
+    await downloader._download_one("vision", "moondream2")
+
+    assert any(c.get("token") == "hf_test_token" for c in captured)
