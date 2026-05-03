@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from videosearch.api import deps
 from videosearch.api.app import create_app
 from videosearch.config import Settings
+from videosearch.models.downloader import DownloadProgress
 
 
 @pytest.fixture
@@ -58,6 +59,15 @@ def mock_worker():
 
 
 @pytest.fixture
+def mock_downloader():
+    m = MagicMock()
+    m.is_cached.return_value = False
+    m.enqueue = AsyncMock(return_value=True)
+    m.progress.return_value = DownloadProgress()
+    return m
+
+
+@pytest.fixture
 def client(
     test_settings,
     mock_searcher,
@@ -68,6 +78,7 @@ def client(
     mock_captions,
     mock_broadcaster,
     mock_worker,
+    mock_downloader,
 ):
     app = create_app(test_settings, startup=False)
     app.dependency_overrides.update({
@@ -80,6 +91,7 @@ def client(
         deps.get_captions_repo: lambda: mock_captions,
         deps.get_broadcaster: lambda: mock_broadcaster,
         deps.get_worker: lambda: mock_worker,
+        deps.get_downloader: lambda: mock_downloader,
     })
     with TestClient(app) as c:
         yield c

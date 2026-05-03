@@ -53,3 +53,7 @@ def get_broadcaster(conn: HTTPConnection) -> JobBroadcaster:
 
 def get_worker(conn: HTTPConnection) -> IndexerWorker:
     return conn.app.state.worker
+
+
+def get_downloader(conn: HTTPConnection) -> "ModelDownloader":  # noqa: F821
+    return conn.app.state.downloader

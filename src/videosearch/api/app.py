@@ -16,12 +16,16 @@ def create_app(settings: Settings, *, startup: bool = True) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if startup:
+            from videosearch.models.downloader import ModelDownloader
             from videosearch.storage.caption_embeddings import CaptionEmbeddingsRepo
             from videosearch.storage.db import Database
             from videosearch.storage.frame_embeddings import FrameEmbeddingsRepo
             from videosearch.storage.jobs import JobsQueue
             from videosearch.storage.library_folders import LibraryFoldersRepo
             from videosearch.storage.videos import VideosRepo
+
+            downloader = ModelDownloader(settings.models_dir)
+            await downloader.start()
 
             db = Database(settings.data_dir)
             jobs_queue = JobsQueue(settings.data_dir / "jobs.db")
@@ -34,6 +38,7 @@ def create_app(settings: Settings, *, startup: bool = True) -> FastAPI:
             broadcaster = JobBroadcaster(loop)
 
             app.state.settings = settings
+            app.state.downloader = downloader
             app.state.jobs_queue = jobs_queue
             app.state.videos_repo = videos
             app.state.frames_repo = frames
@@ -88,6 +93,7 @@ def create_app(settings: Settings, *, startup: bool = True) -> FastAPI:
         fs, health, ingest, jobs, library, search,
         settings as settings_router, videos,
     )
+    from videosearch.api.routers import models as models_router
 
     app.include_router(health.router, prefix="/api")
     app.include_router(search.router, prefix="/api")
@@ -97,6 +103,7 @@ def create_app(settings: Settings, *, startup: bool = True) -> FastAPI:
     app.include_router(videos.router, prefix="/api")
     app.include_router(fs.router, prefix="/api")
     app.include_router(settings_router.router, prefix="/api")
+    app.include_router(models_router.router, prefix="/api")
     app.include_router(make_ws_router(deps.get_broadcaster, deps.get_jobs_queue))
 
     _STATIC = Path(__file__).parent.parent / "static"
