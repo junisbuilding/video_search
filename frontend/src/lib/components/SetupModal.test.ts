@@ -32,7 +32,7 @@ beforeEach(() => {
   vi.mocked(api.getDownloadProgress).mockResolvedValue(idleProgress);
   vi.mocked(api.getModelCatalog).mockResolvedValue(catalogWithFirstRun);
   vi.mocked(api.getSettings).mockResolvedValue({ hf_token: 'already-set' });
-  vi.mocked(api.patchSettings).mockResolvedValue({});
+  vi.mocked(api.patchSettings).mockResolvedValue({ hf_token: null });
   localStorage.clear();
 });
 
@@ -105,7 +105,7 @@ describe('SetupModal', () => {
     vi.mocked(api.getSettings).mockResolvedValue({ hf_token: null });
     render(SetupModal);
     await waitFor(() => screen.getByPlaceholderText('hf_...'));
-    const input = screen.getByPlaceholderText('hf_...');
+    const input = screen.getByPlaceholderText('hf_...') as HTMLInputElement;
     input.value = 'hf_mytoken';
     fireEvent.input(input);
     fireEvent.click(screen.getByText('Continue'));
