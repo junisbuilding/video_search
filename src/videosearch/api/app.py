@@ -19,15 +19,17 @@ def create_app(settings: Settings, *, startup: bool = True) -> FastAPI:
             from videosearch.models.downloader import ModelDownloader
             from videosearch.storage.caption_embeddings import CaptionEmbeddingsRepo
             from videosearch.storage.db import Database
+            from videosearch.storage.downloads import DownloadStateRepo
             from videosearch.storage.frame_embeddings import FrameEmbeddingsRepo
             from videosearch.storage.jobs import JobsQueue
             from videosearch.storage.library_folders import LibraryFoldersRepo
             from videosearch.storage.videos import VideosRepo
 
-            downloader = ModelDownloader(settings.models_dir, token=settings.hf_token)
+            db = Database(settings.data_dir)
+            downloads_repo = DownloadStateRepo(db)
+            downloader = ModelDownloader(settings.models_dir, token=settings.hf_token, repo=downloads_repo)
             await downloader.start()
 
-            db = Database(settings.data_dir)
             jobs_queue = JobsQueue(settings.data_dir / "jobs.db")
             videos = VideosRepo(db)
             frames = FrameEmbeddingsRepo(db)

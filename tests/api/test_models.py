@@ -93,3 +93,27 @@ def test_download_progress_returns_list(client, mock_downloader):
     assert data[0]["active"] is True
     assert data[0]["downloaded_bytes"] == 100
     assert data[0]["total_bytes"] == 1000
+
+
+def test_downloader_has_repo():
+    import asyncio
+    from videosearch.api.app import create_app
+    from videosearch.config import Settings
+    from pathlib import Path
+
+    tmp_path = Path("/tmp/test_app_downloader")
+    settings = Settings(
+        data_dir=tmp_path,
+        models_dir=tmp_path / "models",
+    )
+
+    app = create_app(settings, startup=True)
+
+    # Enter lifespan to initialize app state
+    async def run_test():
+        async with app.router.lifespan_context(app):
+            # Verify downloader has repo
+            assert hasattr(app.state.downloader, "_repo")
+            assert app.state.downloader._repo is not None
+
+    asyncio.run(run_test())
