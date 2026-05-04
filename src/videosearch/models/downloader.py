@@ -120,7 +120,6 @@ class ModelDownloader:
                         lambda: hf_hub_download(
                             repo1, file1,
                             cache_dir=str(self._models_dir),
-                            tqdm_class=tqdm_cls,
                             token=token,
                         ),
                     ),
@@ -129,7 +128,6 @@ class ModelDownloader:
                         lambda: hf_hub_download(
                             repo2, file2,
                             cache_dir=str(self._models_dir),
-                            tqdm_class=tqdm_cls,
                             token=token,
                         ),
                     ),
