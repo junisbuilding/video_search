@@ -64,6 +64,10 @@ def integration_client(tmp_path, tiny_video):
     app.state.library_folders_repo = folders
     app.state.broadcaster = MagicMock()
     app.state.worker = MagicMock()
+    from videosearch.scanning.watcher import LibraryWatcher
+    watcher = LibraryWatcher(jobs_queue, videos)
+    watcher.start()
+    app.state.library_watcher = watcher
     app.dependency_overrides.clear()
 
     with TestClient(app) as client:
@@ -79,6 +83,7 @@ def integration_client(tmp_path, tiny_video):
             settings=settings,
             tiny_video=tiny_video,
         )
+    watcher.stop()
 
 
 def test_integration_ingest_then_search(integration_client):
