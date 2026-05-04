@@ -20,6 +20,14 @@ build/
 # Git worktrees
 .worktrees/
 
+# Secrets / credentials
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
 # Project data
 data/
 /models/
