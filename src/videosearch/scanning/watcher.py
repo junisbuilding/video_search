@@ -7,7 +7,7 @@ from pathlib import Path
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
-from videosearch.scanning.skiplist import DEFAULT_VIDEO_EXTS, should_skip
+from videosearch.scanning.skiplist import DEFAULT_BUNDLE_SUFFIXES, DEFAULT_VIDEO_EXTS, should_skip
 from videosearch.storage.jobs import JobsQueue
 from videosearch.storage.videos import VideosRepo
 
@@ -23,6 +23,8 @@ class WatchStatus:
 def _is_video_by_name(path: Path) -> bool:
     """Check if path looks like a video file by name alone (no filesystem access)."""
     if path.name.startswith("."):
+        return False
+    if any(part.endswith(DEFAULT_BUNDLE_SUFFIXES) for part in path.parts):
         return False
     return path.suffix.lower() in DEFAULT_VIDEO_EXTS
 
@@ -91,6 +93,9 @@ class LibraryWatcher:
         self._observer.join()
 
     def add_watch(self, folder_id: str, path: str | Path) -> None:
+        with self._lock:
+            if folder_id in self._watches:
+                return
         handler = FolderEventHandler(folder_id, self._jobs, self._videos)
         try:
             watch = self._observer.schedule(handler, str(path), recursive=True)
