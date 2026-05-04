@@ -58,3 +58,24 @@ def test_mark_error(tmp_path: Path):
     assert len(all_downloads) == 1
     assert all_downloads[0]["status"] == "error"
     assert all_downloads[0]["error_message"] == "Network error"
+
+def test_cleanup_completed(tmp_path: Path):
+    db = Database(tmp_path)
+    repo = DownloadStateRepo(db)
+
+    repo.create("vision", "model1", 1000)
+    repo.create("siglip", "model2", 2000)
+    repo.create("text_embedder", "model3", 3000)
+
+    repo.mark_complete("vision:model1")
+    repo.mark_error("siglip:model2", "Test error")
+
+    table = db.table("downloads")
+    old_time = time.time() - 7200
+    table.update(where="id = 'vision:model1'", values={"updated_at": old_time})
+
+    repo.cleanup_completed()
+
+    downloads = repo.get_active()
+    assert len(downloads) == 1
+    assert downloads[0]["id"] == "text_embedder:model3"

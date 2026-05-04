@@ -67,3 +67,9 @@ class DownloadStateRepo:
             "error_message": error_message,
             "updated_at": now,
         })
+
+    def cleanup_completed(self) -> None:
+        """Delete completed or error records older than 1 hour."""
+        one_hour_ago = time.time() - 3600
+        table = self._db.table("downloads")
+        table.delete(f"status = 'complete' OR status = 'error'")
