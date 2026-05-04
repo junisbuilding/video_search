@@ -1,3 +1,4 @@
+import threading
 import time
 from pathlib import Path
 from videosearch.storage.downloads import DownloadStateRepo
@@ -79,3 +80,28 @@ def test_cleanup_completed(tmp_path: Path):
     downloads = repo.get_active()
     assert len(downloads) == 1
     assert downloads[0]["id"] == "text_embedder:model3"
+
+def test_concurrent_updates(tmp_path: Path):
+    db = Database(tmp_path)
+    repo = DownloadStateRepo(db)
+
+    repo.create("vision", "model1", 1000)
+
+    errors = []
+    def update_progress(i):
+        try:
+            repo.update_progress("vision:model1", i * 100, 1000)
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=update_progress, args=(i,)) for i in range(10)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(errors) == 0
+
+    downloads = repo.get_active()
+    assert len(downloads) == 1
+    assert downloads[0]["total_bytes"] == 1000
