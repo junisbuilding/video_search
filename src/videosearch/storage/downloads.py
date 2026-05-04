@@ -30,3 +30,13 @@ class DownloadStateRepo:
     def get_active(self) -> list[dict]:
         table = self._db.table("downloads")
         return table.search().where("status != 'complete' AND status != 'error'").to_list()
+
+    def update_progress(self, download_id: str, downloaded_bytes: int, total_bytes: int) -> None:
+        now = time.time()
+        table = self._db.table("downloads")
+        table.update(where=f"id = '{download_id}'", values={
+            "downloaded_bytes": downloaded_bytes,
+            "total_bytes": total_bytes,
+            "status": "downloading",
+            "updated_at": now,
+        })
