@@ -69,7 +69,7 @@ class ModelDownloader:
 
     def progress(self) -> list[DownloadProgress]:
         result = []
-        for key, dp in self._progress.items():
+        for key, dp in list(self._progress.items()):
             lock = self._locks[key]
             bytes_state = self._bytes[key]
             with lock:

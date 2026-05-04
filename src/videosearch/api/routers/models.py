@@ -114,8 +114,8 @@ async def start_download(
         )
     if downloader.is_cached(body.model_type, body.model_id):
         return DownloadResponse(queued=False, reason="already_cached")
-    await downloader.enqueue(body.model_type, body.model_id)
-    return DownloadResponse(queued=True)
+    queued = await downloader.enqueue(body.model_type, body.model_id)
+    return DownloadResponse(queued=queued, reason="" if queued else "already_running")
 
 
 @router.get("/models/download/progress", response_model=list[DownloadProgress])
