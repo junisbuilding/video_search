@@ -50,3 +50,20 @@ class DownloadStateRepo:
             "status": "downloading",
             "updated_at": now,
         })
+
+    def mark_complete(self, download_id: str) -> None:
+        now = time.time()
+        table = self._db.table("downloads")
+        table.update(where=f"id = {_sql_literal(download_id)}", values={
+            "status": "complete",
+            "updated_at": now,
+        })
+
+    def mark_error(self, download_id: str, error_message: str) -> None:
+        now = time.time()
+        table = self._db.table("downloads")
+        table.update(where=f"id = {_sql_literal(download_id)}", values={
+            "status": "error",
+            "error_message": error_message,
+            "updated_at": now,
+        })
