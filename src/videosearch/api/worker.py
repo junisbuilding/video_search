@@ -42,18 +42,18 @@ class IndexerWorker(threading.Thread):
         self._broadcaster = broadcaster
         self._frame_fps = frame_fps
         self._scene_detection = scene_detection
-        self._stop = threading.Event()
+        self._stop_event = threading.Event()
 
     def run(self) -> None:
-        while not self._stop.is_set():
+        while not self._stop_event.is_set():
             job = self._jobs.claim()
             if job is None:
-                self._stop.wait(timeout=1.0)
+                self._stop_event.wait(timeout=1.0)
                 continue
             self._process(job)
 
     def stop(self) -> None:
-        self._stop.set()
+        self._stop_event.set()
 
     def _process(self, job: Job) -> None:
         if not job.path:
