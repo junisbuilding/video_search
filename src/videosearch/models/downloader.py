@@ -10,6 +10,12 @@ from huggingface_hub import hf_hub_download, snapshot_download, try_to_load_from
 
 from videosearch.models.catalog import ModelEntry, find_by_id
 
+# HF cache only creates the snapshot symlink for a file after it has finished
+# downloading, so checking for a weight file is a reliable "fully cached" signal.
+# config.json is a few hundred bytes and lands almost instantly, which would make
+# a model appear cached while gigabytes of weights are still being fetched.
+_WEIGHT_FILENAMES = ("model.safetensors", "pytorch_model.bin")
+
 
 @dataclass
 class DownloadProgress:
@@ -43,8 +49,10 @@ class ModelDownloader:
         if model_type == "vision":
             return self._vision_cached(entry)
         assert entry.hf_repo is not None
-        result = try_to_load_from_cache(entry.hf_repo, "config.json")
-        return result is not None
+        return any(
+            isinstance(try_to_load_from_cache(entry.hf_repo, fname), str)
+            for fname in _WEIGHT_FILENAMES
+        )
 
     def _vision_cached(self, entry: ModelEntry) -> bool:
         assert entry.vlm_model and entry.vlm_mmproj

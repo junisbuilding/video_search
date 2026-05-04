@@ -74,7 +74,7 @@ def test_catalog_first_run_uses_real_is_cached(tmp_path):
     with patch("videosearch.models.downloader.try_to_load_from_cache", return_value=None):
         assert downloader.is_cached("siglip", "siglip2-base") is False
 
-    with patch("videosearch.models.downloader.try_to_load_from_cache", return_value="/cache/config.json"):
+    with patch("videosearch.models.downloader.try_to_load_from_cache", return_value="/cache/model.safetensors"):
         assert downloader.is_cached("siglip", "siglip2-base") is True
 
 

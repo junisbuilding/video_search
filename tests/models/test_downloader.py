@@ -21,9 +21,31 @@ def test_is_cached_returns_false_when_nothing_cached(downloader):
         assert downloader.is_cached("siglip", "siglip2-base") is False
 
 
-def test_is_cached_returns_true_for_hf_model_when_config_present(downloader):
-    with patch("videosearch.models.downloader.try_to_load_from_cache", return_value="/some/path/config.json"):
+def test_is_cached_returns_true_when_safetensors_present(downloader):
+    def side_effect(repo, filename, **kwargs):
+        return "/cache/model.safetensors" if filename == "model.safetensors" else None
+
+    with patch("videosearch.models.downloader.try_to_load_from_cache", side_effect=side_effect):
         assert downloader.is_cached("siglip", "siglip2-base") is True
+
+
+def test_is_cached_accepts_pytorch_bin_fallback(downloader):
+    def side_effect(repo, filename, **kwargs):
+        return "/cache/pytorch_model.bin" if filename == "pytorch_model.bin" else None
+
+    with patch("videosearch.models.downloader.try_to_load_from_cache", side_effect=side_effect):
+        assert downloader.is_cached("text_embedder", "bge-small-en") is True
+
+
+def test_is_cached_false_when_only_config_present(downloader):
+    # Regression: config.json downloads in milliseconds, but weights take minutes.
+    # Reporting "cached" the moment config.json lands made the setup modal flip
+    # to ✓ while gigabytes were still streaming.
+    def side_effect(repo, filename, **kwargs):
+        return "/cache/config.json" if filename == "config.json" else None
+
+    with patch("videosearch.models.downloader.try_to_load_from_cache", side_effect=side_effect):
+        assert downloader.is_cached("siglip", "siglip2-base") is False
 
 
 def test_is_cached_vision_requires_both_files(downloader):
@@ -53,7 +75,7 @@ def test_is_cached_returns_false_for_unknown_type(downloader):
 @pytest.mark.anyio
 async def test_enqueue_already_cached_skips(downloader):
     await downloader.start()
-    with patch("videosearch.models.downloader.try_to_load_from_cache", return_value="/cached/config.json"):
+    with patch("videosearch.models.downloader.try_to_load_from_cache", return_value="/cached/model.safetensors"):
         queued = await downloader.enqueue("siglip", "siglip2-base")
     assert queued is False
     assert downloader.progress() == []
