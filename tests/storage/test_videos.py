@@ -87,3 +87,17 @@ def test_list_by_folder_none_returns_ad_hoc(tmp_path):
     results = repo.list_by_folder(None)
     assert len(results) == 1
     assert results[0].id == "v1"
+
+
+def test_find_by_path_returns_video(tmp_path: Path):
+    repo = VideosRepo(Database(tmp_path))
+    v = _video(path="/videos/movie.mp4", hash="h_path1")
+    repo.insert(v)
+    found = repo.find_by_path("/videos/movie.mp4")
+    assert found is not None
+    assert found.id == v.id
+
+
+def test_find_by_path_returns_none_when_missing(tmp_path: Path):
+    repo = VideosRepo(Database(tmp_path))
+    assert repo.find_by_path("/no/such/path.mp4") is None
