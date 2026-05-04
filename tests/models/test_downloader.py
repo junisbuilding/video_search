@@ -62,3 +62,65 @@ def test_progress_persisted_during_download():
     downloads = repo.get_active()
     assert len(downloads) == 1
     assert downloads[0]["downloaded_bytes"] == 500
+
+def test_completion_persisted_to_repo():
+    tmp_path = Path("/tmp/test_downloader_complete")
+    # Clean up any existing database
+    if tmp_path.exists():
+        shutil.rmtree(tmp_path)
+    
+    db = Database(tmp_path)
+    repo = DownloadStateRepo(db)
+    downloader = ModelDownloader(tmp_path / "models", repo=repo)
+
+    # Create a download record
+    repo.create("vision", "model1", 1000)
+
+    # Simulate completion
+    key = ("vision", "model1")
+    downloader._progress[key] = DownloadProgress(
+        active=True, model_type="vision", model_id="model1"
+    )
+    downloader._locks[key] = threading.Lock()
+
+    # Mark as complete
+    with downloader._locks[key]:
+        downloader._progress[key].active = False
+        downloader._progress[key].complete = True
+        if downloader._repo is not None:
+            downloader._repo.mark_complete("vision:model1")
+
+    # Verify repo was updated
+    downloads = repo.get_active()
+    assert len(downloads) == 0  # Complete downloads are not active
+
+def test_error_persisted_to_repo():
+    tmp_path = Path("/tmp/test_downloader_error")
+    # Clean up any existing database
+    if tmp_path.exists():
+        shutil.rmtree(tmp_path)
+    
+    db = Database(tmp_path)
+    repo = DownloadStateRepo(db)
+    downloader = ModelDownloader(tmp_path / "models", repo=repo)
+
+    # Create a download record
+    repo.create("vision", "model1", 1000)
+
+    # Simulate error
+    key = ("vision", "model1")
+    downloader._progress[key] = DownloadProgress(
+        active=True, model_type="vision", model_id="model1"
+    )
+    downloader._locks[key] = threading.Lock()
+
+    # Mark as error
+    with downloader._locks[key]:
+        downloader._progress[key].active = False
+        downloader._progress[key].error = "Test error"
+        if downloader._repo is not None:
+            downloader._repo.mark_error("vision:model1", "Test error")
+
+    # Verify repo was updated
+    downloads = repo.get_active()
+    assert len(downloads) == 0  # Error downloads are not active

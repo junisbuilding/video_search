@@ -177,11 +177,21 @@ class ModelDownloader:
             with lock:
                 self._progress[key].active = False
                 self._progress[key].complete = True
+                if self._repo is not None:
+                    try:
+                        self._repo.mark_complete(download_id)
+                    except Exception:
+                        pass
 
         except Exception as exc:
             with lock:
                 self._progress[key].active = False
                 self._progress[key].error = str(exc)
+                if self._repo is not None:
+                    try:
+                        self._repo.mark_error(download_id, str(exc))
+                    except Exception:
+                        pass
 
     def _make_tqdm_class(self, bytes_state: dict[str, int], lock: threading.Lock, download_id: str):
         repo = self._repo
