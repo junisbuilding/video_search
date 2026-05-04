@@ -79,6 +79,10 @@ class TestFolderEventHandler:
         self.handler.on_deleted(FileDeletedEvent("/videos/notes.txt"))
         self.videos.find_by_path.assert_not_called()
 
+    def test_on_deleted_skips_bundle_path(self):
+        self.handler.on_deleted(FileDeletedEvent("/Photos.photoslibrary/Masters/clip.mp4"))
+        self.videos.find_by_path.assert_not_called()
+
     def test_on_moved_marks_src_missing_and_enqueues_dst(self, tmp_path):
         src = "/videos/old.mp4"
         dst = tmp_path / "new.mp4"
@@ -135,5 +139,17 @@ class TestLibraryWatcher:
             assert statuses[0].active is False
             assert statuses[0].error is not None
             assert "inotify limit" in statuses[0].error
+        finally:
+            watcher.stop()
+
+    def test_add_watch_idempotent(self, tmp_path):
+        watcher = LibraryWatcher(MagicMock(), MagicMock())
+        watcher.start()
+        try:
+            with patch.object(watcher._observer, "schedule", wraps=watcher._observer.schedule) as mock_schedule:
+                watcher.add_watch("folder-1", tmp_path)
+                watcher.add_watch("folder-1", tmp_path)
+                assert mock_schedule.call_count == 1
+            assert len(watcher.status()) == 1
         finally:
             watcher.stop()
