@@ -72,4 +72,4 @@ class DownloadStateRepo:
         """Delete completed or error records older than 1 hour."""
         one_hour_ago = time.time() - 3600
         table = self._db.table("downloads")
-        table.delete(f"status = 'complete' OR status = 'error'")
+        table.delete(f"(status = 'complete' OR status = 'error') AND updated_at < {one_hour_ago}")
