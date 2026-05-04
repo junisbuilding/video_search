@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from fastapi.testclient import TestClient
+
 from videosearch.models.downloader import DownloadProgress, ModelDownloader
 
 
@@ -117,3 +119,52 @@ def test_downloader_has_repo():
             assert app.state.downloader._repo is not None
 
     asyncio.run(run_test())
+
+
+def test_download_persists_across_restart(tmp_path):
+    """Test that download state persists across server restart."""
+    import time
+    from unittest.mock import patch
+    from videosearch.api.app import create_app
+    from videosearch.config import Settings
+
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        models_dir=tmp_path / "models",
+    )
+
+    # Start server and begin download
+    app1 = create_app(settings, startup=True)
+    with TestClient(app1) as client1:
+        # Mock is_cached to ensure the model is not cached
+        with patch.object(app1.state.downloader, 'is_cached', return_value=False):
+            # Start a download
+            response = client1.post("/api/models/download", json={
+                "model_type": "siglip",
+                "model_id": "siglip2-base",
+            })
+            assert response.status_code == 200
+            result = response.json()
+            assert result["queued"] is True
+
+            # Give the download task time to initialize progress state
+            time.sleep(0.1)
+
+            # Get progress
+            response = client1.get("/api/models/download/progress")
+            assert response.status_code == 200
+            progress1 = response.json()
+            assert len(progress1) >= 1
+
+    # Simulate server restart by creating new app instance
+    app2 = create_app(settings, startup=True)
+    with TestClient(app2) as client2:
+        # Get progress after restart
+        response = client2.get("/api/models/download/progress")
+        assert response.status_code == 200
+        progress2 = response.json()
+
+        # Progress should be restored
+        assert len(progress2) >= 1
+        assert progress2[0]["model_type"] == progress1[0]["model_type"]
+        assert progress2[0]["model_id"] == progress1[0]["model_id"]
