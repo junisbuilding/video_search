@@ -34,3 +34,38 @@ def test_health_degraded_when_db_fails(client, mock_videos):
     assert r.status_code == 200
     assert r.json()["status"] == "degraded"
     assert r.json()["db"] is False
+
+
+def test_health_includes_watchers_field(client, mock_videos, mock_watcher):
+    mock_videos.list_by_status.return_value = []
+    mock_watcher.status.return_value = []
+    r = client.get("/api/health")
+    assert "watchers" in r.json()
+    assert isinstance(r.json()["watchers"], list)
+
+
+def test_health_reports_active_watcher(client, mock_videos, mock_watcher):
+    from videosearch.scanning.watcher import WatchStatus
+    mock_videos.list_by_status.return_value = []
+    mock_watcher.status.return_value = [
+        WatchStatus(folder_id="f1", path="/movies", active=True, error=None)
+    ]
+    r = client.get("/api/health")
+    watchers = r.json()["watchers"]
+    assert len(watchers) == 1
+    assert watchers[0]["folder_id"] == "f1"
+    assert watchers[0]["path"] == "/movies"
+    assert watchers[0]["active"] is True
+    assert watchers[0]["error"] is None
+
+
+def test_health_reports_inactive_watcher_with_error(client, mock_videos, mock_watcher):
+    from videosearch.scanning.watcher import WatchStatus
+    mock_videos.list_by_status.return_value = []
+    mock_watcher.status.return_value = [
+        WatchStatus(folder_id="f1", path="/movies", active=False, error="inotify limit reached")
+    ]
+    r = client.get("/api/health")
+    w = r.json()["watchers"][0]
+    assert w["active"] is False
+    assert "inotify" in w["error"]
