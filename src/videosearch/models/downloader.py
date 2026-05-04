@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+_log = logging.getLogger(__name__)
 
 import tqdm as tqdm_lib
 from huggingface_hub import hf_hub_download, snapshot_download, try_to_load_from_cache
@@ -56,6 +59,12 @@ class ModelDownloader:
             active_downloads = self._repo.get_active()
             for dl in active_downloads:
                 key = (dl["model_type"], dl["model_id"])
+                download_id = f"{dl['model_type']}:{dl['model_id']}"
+                # Records that were queued/downloading when the server last shut
+                # down are not resumable — mark them interrupted so the progress
+                # endpoint doesn't show them as in-flight, and so cleanup can
+                # collect them after the 1-hour retention window.
+                self._repo.mark_error(download_id, "interrupted by server restart")
                 lock = threading.Lock()
                 bytes_state: dict[str, int] = {
                     "downloaded": dl["downloaded_bytes"],
@@ -64,13 +73,13 @@ class ModelDownloader:
                 self._locks[key] = lock
                 self._bytes[key] = bytes_state
                 self._progress[key] = DownloadProgress(
-                    active=True,
+                    active=False,
                     model_type=dl["model_type"],
                     model_id=dl["model_id"],
                     downloaded_bytes=dl["downloaded_bytes"],
                     total_bytes=dl["total_bytes"],
-                    error=dl.get("error_message"),
-                    complete=dl["status"] == "complete",
+                    error="interrupted by server restart",
+                    complete=False,
                 )
 
     def is_cached(self, model_type: str, model_id: str) -> bool:
@@ -157,6 +166,7 @@ class ModelDownloader:
                             repo1, file1,
                             cache_dir=str(self._models_dir),
                             token=token,
+                            tqdm_class=tqdm_cls,
                         ),
                     ),
                     loop.run_in_executor(
@@ -165,6 +175,7 @@ class ModelDownloader:
                             repo2, file2,
                             cache_dir=str(self._models_dir),
                             token=token,
+                            tqdm_class=tqdm_cls,
                         ),
                     ),
                 )
@@ -187,7 +198,7 @@ class ModelDownloader:
                     try:
                         self._repo.mark_complete(download_id)
                     except Exception:
-                        pass
+                        _log.warning("Failed to mark download %s complete in repo", download_id, exc_info=True)
 
         except Exception as exc:
             with lock:
@@ -197,7 +208,7 @@ class ModelDownloader:
                     try:
                         self._repo.mark_error(download_id, str(exc))
                     except Exception:
-                        pass
+                        _log.warning("Failed to mark download %s error in repo", download_id, exc_info=True)
 
     def _make_tqdm_class(self, bytes_state: dict[str, int], lock: threading.Lock, download_id: str):
         repo = self._repo
@@ -216,7 +227,6 @@ class ModelDownloader:
                                 bytes_state["total"],
                             )
                         except Exception:
-                            # Log warning but don't block download
-                            pass
+                            _log.warning("Failed to persist download progress for %s", download_id, exc_info=True)
 
         return _ProgressTqdm

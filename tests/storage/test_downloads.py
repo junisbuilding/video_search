@@ -77,9 +77,22 @@ def test_cleanup_completed(tmp_path: Path):
 
     repo.cleanup_completed()
 
+    # Only the still-active download (model3) should remain active.
     downloads = repo.get_active()
     assert len(downloads) == 1
     assert downloads[0]["id"] == "text_embedder:model3"
+
+    # Re-open the table to get a fresh view post-cleanup.
+    fresh = db.table("downloads")
+
+    # model1 (complete, old) must have been deleted from the table.
+    rows_model1 = fresh.search().where("id = 'vision:model1'").to_list()
+    assert len(rows_model1) == 0
+
+    # model2 (error, recent) must still be in the table — not yet eligible.
+    rows_model2 = fresh.search().where("id = 'siglip:model2'").to_list()
+    assert len(rows_model2) == 1
+    assert rows_model2[0]["status"] == "error"
 
 def test_concurrent_updates(tmp_path: Path):
     db = Database(tmp_path)

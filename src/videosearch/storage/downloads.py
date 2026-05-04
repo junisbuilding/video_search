@@ -1,20 +1,12 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from videosearch.storage.db import Database
 
-
-def _sql_literal(value: Any) -> str:
-    if value is None:
-        return "NULL"
-    if isinstance(value, bool):
-        return "TRUE" if value else "FALSE"
-    if isinstance(value, (int, float)):
-        return repr(value)
-    return "'" + str(value).replace("'", "''") + "'"
+from .videos import _sql_literal
 
 
 class DownloadStateRepo:
@@ -25,6 +17,9 @@ class DownloadStateRepo:
         now = time.time()
         download_id = f"{model_type}:{model_id}"
         table = self._db.table("downloads")
+        # Delete any existing row for this id before inserting so restarted
+        # downloads don't accumulate duplicate rows (LanceDB has no PK constraint).
+        table.delete(f"id = {_sql_literal(download_id)}")
         table.add([{
             "id": download_id,
             "model_type": model_type,

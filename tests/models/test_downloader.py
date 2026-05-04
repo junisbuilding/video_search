@@ -1,104 +1,112 @@
+from __future__ import annotations
+
 import asyncio
-import shutil
 import threading
 from pathlib import Path
-from videosearch.storage.downloads import DownloadStateRepo
+from unittest.mock import patch
+
+import pytest
+
+from videosearch.models.downloader import DownloadProgress, ModelDownloader
 from videosearch.storage.db import Database
-from videosearch.models.downloader import ModelDownloader, DownloadProgress
+from videosearch.storage.downloads import DownloadStateRepo
 
 
 def test_restore_state_from_repo(downloader, tmp_path):
+    # Write a mid-download record to the same DB the fixture uses.
     db = Database(tmp_path / "data")
     repo = DownloadStateRepo(db)
+    repo.create("siglip", "siglip2-base", 1000)
+    repo.update_progress("siglip:siglip2-base", 500, 1000)
 
-    # Create a download record in the repo
-    repo.create("vision", "model1", 1000)
-    repo.update_progress("vision:model1", 500, 1000)
-
-    # Start the downloader to restore state
     asyncio.run(downloader.start())
 
-    # Verify state was restored
     progress = downloader.progress()
     assert len(progress) == 1
-    assert progress[0].model_type == "vision"
-    assert progress[0].model_id == "model1"
+    assert progress[0].model_type == "siglip"
+    assert progress[0].model_id == "siglip2-base"
     assert progress[0].downloaded_bytes == 500
     assert progress[0].total_bytes == 1000
 
 
-def test_progress_persisted_during_download(downloader, tmp_path):
+def test_restore_state_marks_interrupted(downloader, tmp_path):
+    """Records left active from a previous session are shown as interrupted, not in-flight."""
     db = Database(tmp_path / "data")
     repo = DownloadStateRepo(db)
+    repo.create("siglip", "siglip2-base", 1000)
+    repo.update_progress("siglip:siglip2-base", 500, 1000)
 
-    # Create download record in repo (this is what _download_one does)
-    repo.create("vision", "model2", 0)
+    asyncio.run(downloader.start())
 
-    # Start a download (mock the actual download)
-    key = ("vision", "model2")
-    downloader._progress[key] = DownloadProgress(
-        active=True, model_type="vision", model_id="model2"
-    )
-    downloader._bytes[key] = {"downloaded": 0, "total": 1000}
-    downloader._locks[key] = threading.Lock()
+    progress = downloader.progress()
+    assert not progress[0].active
+    assert progress[0].error == "interrupted by server restart"
 
-    # Simulate progress update by calling repo.update_progress directly
-    # (this is what tqdm.update() does internally)
-    repo.update_progress("vision:model2", 500, 1000)
+    # Repo record should be marked as error so cleanup can collect it.
+    active = downloader._repo.get_active()
+    assert len(active) == 0
 
-    # Verify repo was updated
-    downloads = repo.get_active()
+
+def test_progress_persisted_during_download(downloader):
+    """tqdm update writes bytes to the repo record."""
+    downloader._repo.create("siglip", "siglip2-base", 1000)
+    bytes_state: dict[str, int] = {"downloaded": 0, "total": 0}
+    lock = threading.Lock()
+    tqdm_cls = downloader._make_tqdm_class(bytes_state, lock, "siglip:siglip2-base")
+
+    bar = tqdm_cls(total=1000)
+    bar.update(500)
+    bar.close()
+
+    downloads = downloader._repo.get_active()
     assert len(downloads) == 1
     assert downloads[0]["downloaded_bytes"] == 500
+    assert downloads[0]["status"] == "downloading"
 
 
-def test_completion_persisted_to_repo(downloader, tmp_path):
-    db = Database(tmp_path / "data")
-    repo = DownloadStateRepo(db)
+def test_completion_persisted_to_repo(downloader):
+    """Successful _download_one marks the repo record complete."""
+    with patch("videosearch.models.downloader.snapshot_download"):
+        asyncio.run(downloader._download_one("siglip", "siglip2-base"))
 
-    # Create a download record
-    repo.create("vision", "model1", 1000)
+    active = downloader._repo.get_active()
+    assert len(active) == 0
 
-    # Simulate completion
-    key = ("vision", "model1")
-    downloader._progress[key] = DownloadProgress(
-        active=True, model_type="vision", model_id="model1"
-    )
-    downloader._locks[key] = threading.Lock()
-
-    # Mark as complete
-    with downloader._locks[key]:
-        downloader._progress[key].active = False
-        downloader._progress[key].complete = True
-        if downloader._repo is not None:
-            downloader._repo.mark_complete("vision:model1")
-
-    # Verify repo was updated
-    downloads = repo.get_active()
-    assert len(downloads) == 0  # Complete downloads are not active
+    table = downloader._repo._db.table("downloads")
+    rows = table.search().where("id = 'siglip:siglip2-base'").to_list()
+    assert rows[0]["status"] == "complete"
 
 
-def test_error_persisted_to_repo(downloader, tmp_path):
-    db = Database(tmp_path / "data")
-    repo = DownloadStateRepo(db)
+def test_error_persisted_to_repo(downloader):
+    """Failed _download_one marks the repo record as error with message."""
+    with patch("videosearch.models.downloader.snapshot_download", side_effect=RuntimeError("network error")):
+        asyncio.run(downloader._download_one("siglip", "siglip2-base"))
 
-    # Create a download record
-    repo.create("vision", "model1", 1000)
+    active = downloader._repo.get_active()
+    assert len(active) == 0
 
-    # Simulate error
-    key = ("vision", "model1")
-    downloader._progress[key] = DownloadProgress(
-        active=True, model_type="vision", model_id="model1"
-    )
-    downloader._locks[key] = threading.Lock()
+    table = downloader._repo._db.table("downloads")
+    rows = table.search().where("id = 'siglip:siglip2-base'").to_list()
+    assert rows[0]["status"] == "error"
+    assert "network error" in rows[0]["error_message"]
 
-    # Mark as error
-    with downloader._locks[key]:
-        downloader._progress[key].active = False
-        downloader._progress[key].error = "Test error"
-        if downloader._repo is not None:
-            downloader._repo.mark_error("vision:model1", "Test error")
 
-    # Verify repo was updated
-    downloads = repo.get_active()
-    assert len(downloads) == 0  # Error downloads are not active
+def test_vision_download_passes_tqdm_to_hf_hub_download(downloader):
+    """hf_hub_download for vision models receives the tqdm class so progress is tracked."""
+    with patch("videosearch.models.downloader.hf_hub_download") as mock_dl:
+        asyncio.run(downloader._download_one("vision", "moondream2"))
+
+    assert mock_dl.call_count == 2
+    for call in mock_dl.call_args_list:
+        assert "tqdm_class" in call.kwargs
+
+
+def test_create_is_idempotent(downloader):
+    """Calling create() twice for the same id replaces the row, not duplicates it."""
+    downloader._repo.create("siglip", "siglip2-base", 1000)
+    downloader._repo.create("siglip", "siglip2-base", 2000)
+
+    table = downloader._repo._db.table("downloads")
+    rows = table.search().where("id = 'siglip:siglip2-base'").to_list()
+    assert len(rows) == 1
+    assert rows[0]["total_bytes"] == 2000
