@@ -22,7 +22,6 @@ def default_models_dir() -> Path:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="VS_", extra="ignore")
 
-    library_paths: list[Path] = Field(default_factory=list)
     data_dir: Path = Field(default_factory=default_data_dir)
     models_dir: Path = Field(default_factory=default_models_dir)
 
