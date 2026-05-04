@@ -90,7 +90,7 @@ describe('SetupModal', () => {
     expect(screen.queryByPlaceholderText('hf_...')).not.toBeInTheDocument();
   });
 
-  it('Skip button starts downloads without calling patchSettings', async () => {
+  it('Skip button saves empty token and starts downloads', async () => {
     vi.mocked(api.getSettings).mockResolvedValue({ hf_token: null });
     render(SetupModal);
     await waitFor(() => screen.getByText('Skip'));
@@ -98,7 +98,7 @@ describe('SetupModal', () => {
     await waitFor(() => {
       expect(api.startModelDownload).toHaveBeenCalled();
     });
-    expect(api.patchSettings).not.toHaveBeenCalled();
+    expect(api.patchSettings).toHaveBeenCalledWith({ hf_token: '' });
   });
 
   it('Continue button saves token and starts downloads', async () => {

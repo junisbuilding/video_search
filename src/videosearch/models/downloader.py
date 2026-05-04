@@ -100,6 +100,7 @@ class ModelDownloader:
         try:
             loop = asyncio.get_running_loop()
             tqdm_cls = self._make_tqdm_class(bytes_state, lock)
+            token = self._token or None
 
             if model_type == "vision":
                 assert entry.vlm_model and entry.vlm_mmproj
@@ -112,7 +113,7 @@ class ModelDownloader:
                             repo1, file1,
                             cache_dir=str(self._models_dir),
                             tqdm_class=tqdm_cls,
-                            token=self._token,
+                            token=token,
                         ),
                     ),
                     loop.run_in_executor(
@@ -121,7 +122,7 @@ class ModelDownloader:
                             repo2, file2,
                             cache_dir=str(self._models_dir),
                             tqdm_class=tqdm_cls,
-                            token=self._token,
+                            token=token,
                         ),
                     ),
                 )
@@ -132,7 +133,7 @@ class ModelDownloader:
                     lambda: snapshot_download(
                         entry.hf_repo,
                         tqdm_class=tqdm_cls,
-                        token=self._token,
+                        token=token,
                     ),
                 )
 

@@ -90,6 +90,7 @@
   }
 
   async function handleSkip() {
+    await patchSettings({ hf_token: '' });
     await beginDownloads();
   }
 
@@ -105,6 +106,12 @@
     visionEntries = catalog.vision;
     siglipEntries = catalog.siglip;
     textEntries = catalog.text_embedder;
+
+    if (!catalog.first_run) {
+      localStorage.setItem('setup_seen', '1');
+      visible = false;
+      return;
+    }
 
     if (settings.hf_token !== null) {
       await beginDownloads();
