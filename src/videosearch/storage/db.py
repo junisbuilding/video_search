@@ -6,6 +6,7 @@ import lancedb
 
 from .schemas import (
     CaptionEmbeddingRow,
+    DownloadRow,
     FrameEmbeddingRow,
     LibraryFolderRow,
     VideoRow,
@@ -16,6 +17,7 @@ _TABLES: dict[str, type] = {
     "frame_embeddings": FrameEmbeddingRow,
     "caption_embeddings": CaptionEmbeddingRow,
     "library_folders": LibraryFolderRow,
+    "downloads": DownloadRow,
 }
 
 

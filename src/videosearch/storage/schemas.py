@@ -46,3 +46,15 @@ class LibraryFolderRow(LanceModel):
     id: str
     path: str
     added_at: float
+
+
+class DownloadRow(LanceModel):
+    id: str
+    model_type: str
+    model_id: str
+    downloaded_bytes: int
+    total_bytes: int
+    status: str  # queued, downloading, complete, error
+    error_message: str | None = None
+    updated_at: float
+    created_at: float
