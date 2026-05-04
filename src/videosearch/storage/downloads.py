@@ -1,10 +1,20 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from videosearch.storage.db import Database
+
+
+def _sql_literal(value: Any) -> str:
+    if value is None:
+        return "NULL"
+    if isinstance(value, bool):
+        return "TRUE" if value else "FALSE"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    return "'" + str(value).replace("'", "''") + "'"
 
 
 class DownloadStateRepo:
@@ -34,7 +44,7 @@ class DownloadStateRepo:
     def update_progress(self, download_id: str, downloaded_bytes: int, total_bytes: int) -> None:
         now = time.time()
         table = self._db.table("downloads")
-        table.update(where=f"id = '{download_id}'", values={
+        table.update(where=f"id = {_sql_literal(download_id)}", values={
             "downloaded_bytes": downloaded_bytes,
             "total_bytes": total_bytes,
             "status": "downloading",
