@@ -32,13 +32,13 @@ class Database:
         self._ensure_tables()
 
     def _ensure_tables(self) -> None:
-        existing = set(self._db.list_tables().tables)
+        existing = set(self._db.table_names())
         for name, model in _TABLES.items():
             if name not in existing:
                 self._db.create_table(name, schema=model)
 
     def table_names(self) -> list[str]:
-        return self._db.list_tables().tables
+        return self._db.table_names()
 
     def table(self, name: str):
         return self._db.open_table(name)
