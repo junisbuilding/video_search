@@ -37,7 +37,31 @@ def test_env_overrides_toml(tmp_path, monkeypatch):
     assert s.port == 9999
 
 
-def test_hf_token_defaults_to_none():
+def test_load_config_reads_default_data_dir_toml(tmp_path, monkeypatch):
+    """load_config() with no args reads config.toml from the default data directory."""
+    monkeypatch.setenv("VS_DATA_DIR", str(tmp_path))
+    cfg = tmp_path / "config.toml"
+    cfg.write_text('port = 7777\n')
+    # patch default_data_dir so it resolves to tmp_path
+    import videosearch.config as config_mod
+    monkeypatch.setattr(config_mod, "default_data_dir", lambda: tmp_path)
+    s = load_config()
+    assert s.port == 7777
+
+
+def test_hf_token_survives_no_arg_reload(tmp_path, monkeypatch):
+    """Token written by PATCH is picked up by a no-arg load_config() call (server restart)."""
+    import videosearch.config as config_mod
+    monkeypatch.setattr(config_mod, "default_data_dir", lambda: tmp_path)
+    cfg = tmp_path / "config.toml"
+    cfg.write_text('hf_token = "hf_restart"\n')
+    s = load_config()
+    assert s.hf_token == "hf_restart"
+
+
+def test_hf_token_defaults_to_none(tmp_path, monkeypatch):
+    import videosearch.config as config_mod
+    monkeypatch.setattr(config_mod, "default_data_dir", lambda: tmp_path)
     s = load_config()
     assert s.hf_token is None
 

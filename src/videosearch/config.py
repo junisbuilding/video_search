@@ -43,9 +43,10 @@ def load_config(toml_path: Path | None = None) -> Settings:
 
     Precedence: env vars > TOML file > field defaults.
     """
+    resolved = toml_path or (default_data_dir() / "config.toml")
     file_data: dict = {}
-    if toml_path and toml_path.exists():
-        with toml_path.open("rb") as f:
+    if resolved.exists():
+        with resolved.open("rb") as f:
             file_data = tomllib.load(f)
 
     # Read env vars manually to ensure they take precedence over file data
