@@ -3,8 +3,7 @@ from pathlib import Path
 from videosearch.storage.downloads import DownloadStateRepo
 from videosearch.storage.db import Database
 
-def test_create_download():
-    tmp_path = Path("/tmp/test_downloads")
+def test_create_download(tmp_path: Path):
     db = Database(tmp_path)
     repo = DownloadStateRepo(db)
 
