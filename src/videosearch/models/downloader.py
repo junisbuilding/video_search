@@ -35,7 +35,12 @@ class DownloadProgress:
 class ModelDownloader:
     """Downloads models concurrently — one asyncio task per model. Thread-safe progress."""
 
-    def __init__(self, models_dir: Path, token: str | None = None, repo: DownloadStateRepo | None = None) -> None:
+    def __init__(
+        self,
+        models_dir: Path,
+        token: str | None = None,
+        repo: DownloadStateRepo | None = None,
+    ) -> None:
         self._models_dir = models_dir
         self._token = token
         self._repo = repo
@@ -165,10 +170,11 @@ class ModelDownloader:
                 )
             else:
                 assert entry.hf_repo is not None
+                hf_repo = entry.hf_repo
                 await loop.run_in_executor(
                     None,
                     lambda: snapshot_download(
-                        entry.hf_repo,
+                        hf_repo,
                         tqdm_class=tqdm_cls,
                         token=token,
                     ),

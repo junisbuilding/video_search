@@ -27,7 +27,11 @@ def create_app(settings: Settings, *, startup: bool = True) -> FastAPI:
 
             db = Database(settings.data_dir)
             downloads_repo = DownloadStateRepo(db)
-            downloader = ModelDownloader(settings.models_dir, token=settings.hf_token, repo=downloads_repo)
+            downloader = ModelDownloader(
+                settings.models_dir,
+                token=settings.hf_token,
+                repo=downloads_repo,
+            )
             await downloader.start()
 
             jobs_queue = JobsQueue(settings.data_dir / "jobs.db")
@@ -50,12 +54,12 @@ def create_app(settings: Settings, *, startup: bool = True) -> FastAPI:
 
             worker = None
             if settings.vlm_model and settings.vlm_mmproj:
+                from videosearch.api.worker import IndexerWorker
                 from videosearch.models.bge import BgeTextEmbedder
                 from videosearch.models.llama_cpp_captioner import LlamaCppCaptioner
                 from videosearch.models.loader import resolve_gguf
                 from videosearch.models.siglip import SiglipEmbedder
                 from videosearch.search import Searcher
-                from videosearch.api.worker import IndexerWorker
 
                 image_embedder = SiglipEmbedder(settings.siglip_model)
                 text_embedder = BgeTextEmbedder(settings.text_embedder)
@@ -92,10 +96,18 @@ def create_app(settings: Settings, *, startup: bool = True) -> FastAPI:
     app = FastAPI(lifespan=lifespan, title="Video Search API")
 
     from videosearch.api.routers import (
-        fs, health, ingest, jobs, library, search,
-        settings as settings_router, videos,
+        fs,
+        health,
+        ingest,
+        jobs,
+        library,
+        search,
+        videos,
     )
     from videosearch.api.routers import models as models_router
+    from videosearch.api.routers import (
+        settings as settings_router,
+    )
 
     app.include_router(health.router, prefix="/api")
     app.include_router(search.router, prefix="/api")
