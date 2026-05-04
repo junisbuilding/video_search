@@ -120,6 +120,7 @@ class ModelDownloader:
 
     async def _download_one(self, model_type: str, model_id: str) -> None:
         key = (model_type, model_id)
+        download_id = f"{model_type}:{model_id}"
         lock = threading.Lock()
         bytes_state: dict[str, int] = {"downloaded": 0, "total": 0}
         self._locks[key] = lock
@@ -128,12 +129,16 @@ class ModelDownloader:
             active=True, model_type=model_type, model_id=model_id
         )
 
+        # Create download record in repo
+        if self._repo is not None:
+            self._repo.create(model_type, model_id, 0)  # total_bytes may be 0 initially
+
         entry = find_by_id(model_type, model_id)
         assert entry is not None
 
         try:
             loop = asyncio.get_running_loop()
-            tqdm_cls = self._make_tqdm_class(bytes_state, lock)
+            tqdm_cls = self._make_tqdm_class(bytes_state, lock, download_id)
             token = self._token or None
 
             if model_type == "vision":
@@ -178,12 +183,24 @@ class ModelDownloader:
                 self._progress[key].active = False
                 self._progress[key].error = str(exc)
 
-    def _make_tqdm_class(self, bytes_state: dict[str, int], lock: threading.Lock):
+    def _make_tqdm_class(self, bytes_state: dict[str, int], lock: threading.Lock, download_id: str):
+        repo = self._repo
         class _ProgressTqdm(tqdm_lib.tqdm):
             def update(self, n=1):
                 super().update(n)
                 with lock:
                     bytes_state["downloaded"] = int(self.n)
                     bytes_state["total"] = int(self.total or 0)
+                    # Persist to repo
+                    if repo is not None:
+                        try:
+                            repo.update_progress(
+                                download_id,
+                                bytes_state["downloaded"],
+                                bytes_state["total"],
+                            )
+                        except Exception:
+                            # Log warning but don't block download
+                            pass
 
         return _ProgressTqdm
