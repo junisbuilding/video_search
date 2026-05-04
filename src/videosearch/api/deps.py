@@ -7,6 +7,7 @@ from videosearch.api.worker import IndexerWorker
 from videosearch.api.ws import JobBroadcaster
 from videosearch.config import Settings
 from videosearch.models.downloader import ModelDownloader
+from videosearch.scanning.watcher import LibraryWatcher
 from videosearch.search import Searcher
 from videosearch.storage.caption_embeddings import CaptionEmbeddingsRepo
 from videosearch.storage.frame_embeddings import FrameEmbeddingsRepo
@@ -58,3 +59,7 @@ def get_worker(conn: HTTPConnection) -> IndexerWorker:
 
 def get_downloader(conn: HTTPConnection) -> ModelDownloader:
     return conn.app.state.downloader
+
+
+def get_library_watcher(conn: HTTPConnection) -> LibraryWatcher:
+    return conn.app.state.library_watcher
