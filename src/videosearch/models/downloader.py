@@ -4,11 +4,15 @@ import asyncio
 import threading
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import tqdm as tqdm_lib
 from huggingface_hub import hf_hub_download, snapshot_download, try_to_load_from_cache
 
 from videosearch.models.catalog import ModelEntry, find_by_id
+
+if TYPE_CHECKING:
+    from videosearch.storage.downloads import DownloadStateRepo
 
 # HF cache only creates the snapshot symlink for a file after it has finished
 # downloading, so checking for a weight file is a reliable "fully cached" signal.
@@ -31,16 +35,38 @@ class DownloadProgress:
 class ModelDownloader:
     """Downloads models concurrently — one asyncio task per model. Thread-safe progress."""
 
-    def __init__(self, models_dir: Path, token: str | None = None) -> None:
+    def __init__(self, models_dir: Path, token: str | None = None, repo: DownloadStateRepo | None = None) -> None:
         self._models_dir = models_dir
         self._token = token
+        self._repo = repo
         self._tasks: dict[tuple[str, str], asyncio.Task] = {}
         self._progress: dict[tuple[str, str], DownloadProgress] = {}
         self._bytes: dict[tuple[str, str], dict[str, int]] = {}
         self._locks: dict[tuple[str, str], threading.Lock] = {}
 
     async def start(self) -> None:
-        """No-op — kept for interface compatibility with lifespan caller."""
+        """Restore state from repo and cleanup old records."""
+        if self._repo is not None:
+            self._repo.cleanup_completed()
+            active_downloads = self._repo.get_active()
+            for dl in active_downloads:
+                key = (dl["model_type"], dl["model_id"])
+                lock = threading.Lock()
+                bytes_state: dict[str, int] = {
+                    "downloaded": dl["downloaded_bytes"],
+                    "total": dl["total_bytes"],
+                }
+                self._locks[key] = lock
+                self._bytes[key] = bytes_state
+                self._progress[key] = DownloadProgress(
+                    active=True,
+                    model_type=dl["model_type"],
+                    model_id=dl["model_id"],
+                    downloaded_bytes=dl["downloaded_bytes"],
+                    total_bytes=dl["total_bytes"],
+                    error=dl.get("error_message"),
+                    complete=dl["status"] == "complete",
+                )
 
     def is_cached(self, model_type: str, model_id: str) -> bool:
         entry = find_by_id(model_type, model_id)
