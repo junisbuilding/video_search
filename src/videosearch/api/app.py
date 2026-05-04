@@ -52,6 +52,13 @@ def create_app(settings: Settings, *, startup: bool = True) -> FastAPI:
             app.state.library_folders_repo = folders
             app.state.broadcaster = broadcaster
 
+            from videosearch.scanning.watcher import LibraryWatcher
+            watcher = LibraryWatcher(jobs_queue, videos)
+            watcher.start()
+            for folder in folders.list_all():
+                watcher.add_watch(folder.id, folder.path)
+            app.state.library_watcher = watcher
+
             worker = None
             if settings.vlm_model and settings.vlm_mmproj:
                 from videosearch.api.worker import IndexerWorker
@@ -89,6 +96,7 @@ def create_app(settings: Settings, *, startup: bool = True) -> FastAPI:
             if worker is not None:
                 worker.stop()
                 worker.join(timeout=10)
+            watcher.stop()
             jobs_queue.close()
         else:
             yield

@@ -41,6 +41,15 @@ class VideosRepo:
         )
         return VideoRow(**results[0]) if results else None
 
+    def find_by_path(self, path: str) -> VideoRow | None:
+        results = (
+            self._table.search()
+            .where(f"path = {_sql_literal(path)}")
+            .limit(1)
+            .to_list()
+        )
+        return VideoRow(**results[0]) if results else None
+
     def update(self, id_: str, **fields: Any) -> None:
         if not fields:
             return

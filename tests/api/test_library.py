@@ -83,3 +83,22 @@ def test_rescan_enqueues_non_indexed_files(client, mock_folders, mock_jobs, tmp_
 
     assert r.status_code == 200
     assert mock_jobs.enqueue.call_count == 1
+
+
+def test_register_folder_calls_add_watch(client, mock_folders, mock_jobs, mock_watcher, tmp_path):
+    folder = tmp_path / "movies"
+    folder.mkdir()
+    (folder / "a.mp4").write_bytes(b"x" * 200_000)
+
+    client.post("/api/library/folders", json={"path": str(folder)})
+
+    mock_watcher.add_watch.assert_called_once()
+
+
+def test_delete_folder_calls_remove_watch(client, mock_folders, mock_videos, mock_watcher):
+    mock_folders.find_by_id.return_value = _folder("f1")
+    mock_videos.list_by_folder.return_value = []
+
+    client.delete("/api/library/folders/f1")
+
+    mock_watcher.remove_watch.assert_called_once_with("f1")

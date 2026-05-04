@@ -11,9 +11,11 @@ from pydantic import BaseModel
 from videosearch.api.deps import (
     get_jobs_queue,
     get_library_folders_repo,
+    get_library_watcher,
     get_videos_repo,
 )
 from videosearch.scanning.skiplist import should_skip
+from videosearch.scanning.watcher import LibraryWatcher
 from videosearch.storage.jobs import JobsQueue
 from videosearch.storage.library_folders import LibraryFoldersRepo
 from videosearch.storage.schemas import LibraryFolderRow
@@ -92,6 +94,7 @@ async def register_folder(
     body: RegisterFolderRequest,
     folders: LibraryFoldersRepo = Depends(get_library_folders_repo),
     jobs: JobsQueue = Depends(get_jobs_queue),
+    watcher: LibraryWatcher = Depends(get_library_watcher),
 ) -> RegisterFolderResponse:
     path = Path(body.path)
     if not path.is_dir():
@@ -102,6 +105,7 @@ async def register_folder(
     folders.insert(folder)
 
     count = await asyncio.to_thread(_walk_and_enqueue, path, folder_id, jobs)
+    watcher.add_watch(folder_id, path)
     return RegisterFolderResponse(
         folder=FolderResponse(
             id=folder.id, path=folder.path, added_at=folder.added_at,
@@ -117,6 +121,7 @@ async def delete_folder(
     purge: bool = False,
     folders: LibraryFoldersRepo = Depends(get_library_folders_repo),
     videos: VideosRepo = Depends(get_videos_repo),
+    watcher: LibraryWatcher = Depends(get_library_watcher),
 ) -> dict:
     folder = folders.find_by_id(folder_id)
     if folder is None:
@@ -124,6 +129,7 @@ async def delete_folder(
     if purge:
         for video in videos.list_by_folder(folder_id):
             videos.update(video.id, status="missing")
+    watcher.remove_watch(folder_id)
     folders.delete(folder_id)
     return {"ok": True}
 

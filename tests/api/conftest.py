@@ -68,6 +68,13 @@ def mock_downloader():
 
 
 @pytest.fixture
+def mock_watcher():
+    m = MagicMock()
+    m.status.return_value = []
+    return m
+
+
+@pytest.fixture
 def client(
     test_settings,
     mock_searcher,
@@ -79,6 +86,7 @@ def client(
     mock_broadcaster,
     mock_worker,
     mock_downloader,
+    mock_watcher,
 ):
     app = create_app(test_settings, startup=False)
     app.dependency_overrides.update({
@@ -92,6 +100,7 @@ def client(
         deps.get_broadcaster: lambda: mock_broadcaster,
         deps.get_worker: lambda: mock_worker,
         deps.get_downloader: lambda: mock_downloader,
+        deps.get_library_watcher: lambda: mock_watcher,
     })
     with TestClient(app) as c:
         yield c
