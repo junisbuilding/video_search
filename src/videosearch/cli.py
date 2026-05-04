@@ -20,6 +20,9 @@ def serve(
     models_dir: Optional[Path] = typer.Option(None, "--models-dir", help="Models directory override."),
 ) -> None:
     """Start the video search server."""
+    if os.getuid() == 0:
+        typer.echo("Warning: running as root — data files will be owned by root and unreadable by other users.", err=True)
+
     if data_dir:
         os.environ["VS_DATA_DIR"] = str(data_dir)
     if models_dir:
