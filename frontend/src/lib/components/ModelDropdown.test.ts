@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import ModelDropdown from './ModelDropdown.svelte';
 
 describe('ModelDropdown', () => {
@@ -99,5 +99,48 @@ describe('ModelDropdown', () => {
 
     const optionsAfter = container.querySelector('.dropdown-options');
     expect(optionsAfter).toBeFalsy();
+  });
+
+  it('supports keyboard navigation', async () => {
+    const catalog = {
+      vision: [
+        { id: 'model1', label: 'Model 1', size_label: '1 GB', cached: false, default: true },
+        { id: 'model2', label: 'Model 2', size_label: '2 GB', cached: false, default: false }
+      ],
+      siglip: [],
+      text_embedder: [],
+      active_models: { vision: '', siglip: '', text_embedder: '' },
+      first_run: false
+    };
+    let selectedId = 'model1';
+    const { container } = render(ModelDropdown, {
+      props: {
+        type: 'vision',
+        catalog,
+        selectedId,
+        progress: null,
+        onchange: (id) => { selectedId = id; }
+      }
+    });
+
+    const trigger = container.querySelector('.dropdown-trigger') as HTMLElement;
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const options = container.querySelectorAll('.dropdown-option');
+    expect(options.length).toBe(2);
+
+    const firstOption = options[0] as HTMLElement;
+    fireEvent.keyDown(firstOption, { key: 'ArrowDown' });
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const secondOption = options[1] as HTMLElement;
+    fireEvent.keyDown(secondOption, { key: 'Enter' });
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(selectedId).toBe('model2');
   });
 });

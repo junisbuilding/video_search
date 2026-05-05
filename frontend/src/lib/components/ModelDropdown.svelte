@@ -11,6 +11,7 @@
 
   let isOpen = $state(false);
   let dropdownElement: HTMLDivElement;
+  let focusedIndex = $state(-1);
 
   function getEntries() {
     return catalog[type];
@@ -45,12 +46,41 @@
     if (isDownloading() && entry.id === selectedId) return { text: 'Downloading', color: '#3b82f6' };
     return { text: 'Not cached', color: '#555' };
   }
+
+  function handleKeyDown(event: KeyboardEvent) {
+    const entries = getEntries();
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      if (isOpen && focusedIndex >= 0 && focusedIndex < entries.length) {
+        selectOption(entries[focusedIndex].id);
+      } else {
+        toggleDropdown();
+      }
+    } else if (event.key === 'Escape') {
+      isOpen = false;
+      focusedIndex = -1;
+    } else if (isOpen) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        focusedIndex = Math.min(focusedIndex + 1, entries.length - 1);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        focusedIndex = Math.max(focusedIndex - 1, 0);
+      }
+    }
+  }
+
+  function handleOptionKeyDown(event: KeyboardEvent, index: number) {
+    focusedIndex = index;
+    handleKeyDown(event);
+  }
 </script>
 
 <svelte:body on:click={handleClickOutside} />
 
 <div class="dropdown" bind:this={dropdownElement}>
-  <div class="dropdown-trigger" onclick={toggleDropdown}>
+  <div class="dropdown-trigger" onclick={toggleDropdown} onkeydown={handleKeyDown} tabindex="0">
     {#if getSelectedEntry()}
       <span class="selected-label">{getSelectedEntry()?.label || 'Select model'}</span>
       <span class="selected-size">{getSelectedEntry()?.size_label || ''}</span>
@@ -64,8 +94,14 @@
 
   {#if isOpen}
     <div class="dropdown-options">
-      {#each getEntries() as entry}
-        <div class="dropdown-option" onclick={() => selectOption(entry.id)}>
+      {#each getEntries() as entry, index}
+        <div
+          class="dropdown-option"
+          class:focused={index === focusedIndex}
+          onclick={() => selectOption(entry.id)}
+          onkeydown={(e) => handleOptionKeyDown(e, index)}
+          tabindex="0"
+        >
           <span class="option-label">{entry.label}</span>
           <span class="option-size">{entry.size_label}</span>
           <span class="option-badge" style="background: {getBadge(entry).color}">
@@ -150,6 +186,10 @@
 
   .dropdown-option:hover {
     background: #2a2a2a;
+  }
+
+  .dropdown-option.focused {
+    background: #3b82f6;
   }
 
   .option-label {
