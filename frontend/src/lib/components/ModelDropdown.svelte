@@ -44,6 +44,7 @@
   function getBadge(entry: ModelCatalogEntry) {
     if (entry.cached) return { text: 'Cached', color: '#4ade80' };
     if (isDownloading() && entry.id === selectedId) return { text: 'Downloading', color: '#3b82f6' };
+    if (progress?.error && entry.id === selectedId) return { text: 'Error', color: '#ef4444' };
     return { text: 'Not cached', color: '#555' };
   }
 

@@ -143,4 +143,40 @@ describe('ModelDropdown', () => {
 
     expect(selectedId).toBe('model2');
   });
+
+  it('renders error badge for failed downloads', async () => {
+    const catalog = {
+      vision: [{ id: 'model1', label: 'Model 1', size_label: '1 GB', cached: false, default: true }],
+      siglip: [],
+      text_embedder: [],
+      active_models: { vision: '', siglip: '', text_embedder: '' },
+      first_run: false
+    };
+    const progress = {
+      active: false,
+      model_type: 'vision',
+      model_id: 'model1',
+      downloaded_bytes: 0,
+      total_bytes: 1000000000,
+      error: 'Download failed: network error'
+    };
+    const { container } = render(ModelDropdown, {
+      props: {
+        type: 'vision',
+        catalog,
+        selectedId: 'model1',
+        progress,
+        onchange: () => {}
+      }
+    });
+
+    const trigger = container.querySelector('.dropdown-trigger');
+    trigger?.click();
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const badge = container.querySelector('.option-badge');
+    expect(badge?.textContent).toBe('Error');
+    expect(badge?.getAttribute('style')).toContain('rgb(239, 68, 68)');
+  });
 });
