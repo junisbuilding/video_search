@@ -10,6 +10,7 @@
   } = $props();
 
   let isOpen = $state(false);
+  let dropdownElement: HTMLDivElement;
 
   function getEntries() {
     return catalog[type];
@@ -21,6 +22,12 @@
 
   function toggleDropdown() {
     isOpen = !isOpen;
+  }
+
+  function handleClickOutside(event: MouseEvent) {
+    if (dropdownElement && !dropdownElement.contains(event.target as Node)) {
+      isOpen = false;
+    }
   }
 
   function selectOption(id: string) {
@@ -40,7 +47,9 @@
   }
 </script>
 
-<div class="dropdown">
+<svelte:body on:click={handleClickOutside} />
+
+<div class="dropdown" bind:this={dropdownElement}>
   <div class="dropdown-trigger" onclick={toggleDropdown}>
     {#if getSelectedEntry()}
       <span class="selected-label">{getSelectedEntry()?.label || 'Select model'}</span>

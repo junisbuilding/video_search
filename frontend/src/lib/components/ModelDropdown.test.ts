@@ -66,4 +66,38 @@ describe('ModelDropdown', () => {
     });
     expect(container).toBeTruthy();
   });
+
+  it('closes dropdown when clicking outside', async () => {
+    const catalog = {
+      vision: [{ id: 'model1', label: 'Model 1', size_label: '1 GB', cached: false, default: true }],
+      siglip: [],
+      text_embedder: [],
+      active_models: { vision: '', siglip: '', text_embedder: '' },
+      first_run: false
+    };
+    const { container } = render(ModelDropdown, {
+      props: {
+        type: 'vision',
+        catalog,
+        selectedId: 'model1',
+        progress: null,
+        onchange: () => {}
+      }
+    });
+
+    const trigger = container.querySelector('.dropdown-trigger');
+    trigger?.click();
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const options = container.querySelector('.dropdown-options');
+    expect(options).toBeTruthy();
+
+    document.body.click();
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const optionsAfter = container.querySelector('.dropdown-options');
+    expect(optionsAfter).toBeFalsy();
+  });
 });
