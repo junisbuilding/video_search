@@ -3,6 +3,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { getModelCatalog, getSettings, patchSettings, startModelDownload, getDownloadProgress } from '$lib/api';
   import type { ModelCatalogEntry, ModelCatalogResponse, DownloadProgress } from '$lib/types';
+  import ModelDropdown from '$lib/components/ModelDropdown.svelte';
 
   let catalog = $state<ModelCatalogResponse | null>(null);
   let currentSettings = $state<Record<string, unknown>>({});
@@ -127,27 +128,6 @@
     const am = catalog.active_models[type as keyof typeof catalog.active_models];
     return am || catalog[type as 'vision' | 'siglip' | 'text_embedder'].find((e: ModelCatalogEntry) => e.default)?.id || '';
   }
-
-  function activeCachedForType(type: string): boolean {
-    if (!catalog) return false;
-    const id = selectedId(type);
-    return catalog[type as 'vision' | 'siglip' | 'text_embedder'].find((e: ModelCatalogEntry) => e.id === id)?.cached ?? false;
-  }
-
-  function isDownloadingType(type: string): boolean {
-    return (progress?.active ?? false) && progress?.model_type === type;
-  }
-
-  function downloadPct(): number {
-    if (!progress?.total_bytes) return 0;
-    return Math.round((progress.downloaded_bytes / progress.total_bytes) * 100);
-  }
-
-  function formatBytes(n: number): string {
-    if (n > 1e9) return (n / 1e9).toFixed(1) + ' GB';
-    if (n > 1e6) return (n / 1e6).toFixed(0) + ' MB';
-    return n + ' B';
-  }
 </script>
 
 <div class="page">
@@ -158,99 +138,39 @@
     <section class="model-section">
       <div class="model-label">Vision model</div>
       <p class="model-desc">Describes what's happening in each frame of your videos — the smarter the model, the better your search results.</p>
-      <div class="select-row">
-        <select
-          class="model-select"
-          value={selectedId('vision')}
-          onchange={(e) => handleModelChange('vision', (e.target as HTMLSelectElement).value)}
-        >
-          {#each catalog.vision as entry}
-            <option value={entry.id}>{entry.label} · {entry.size_label}</option>
-          {/each}
-        </select>
-        {#if !isDownloadingType('vision')}
-          {#if activeCachedForType('vision')}
-            <span class="cached-badge">● Cached</span>
-          {:else}
-            <span class="uncached-badge">○ Not cached</span>
-          {/if}
-        {/if}
-      </div>
-      {#if isDownloadingType('vision')}
-        <div class="progress-box">
-          <div class="progress-header">
-            <span>Downloading…</span>
-            <span class="progress-pct">{formatBytes(progress!.downloaded_bytes)} / {formatBytes(progress!.total_bytes)}</span>
-          </div>
-          <div class="progress-track"><div class="progress-fill" style="width:{downloadPct()}%"></div></div>
-        </div>
-      {/if}
+      <ModelDropdown
+        type="vision"
+        catalog={catalog}
+        selectedId={selectedId('vision')}
+        progress={progress}
+        onchange={(id) => handleModelChange('vision', id)}
+      />
     </section>
 
     <!-- Image understanding -->
     <section class="model-section">
       <div class="model-label">Image understanding</div>
       <p class="model-desc">Recognises objects, scenes, and people in video frames so you can search visually.</p>
-      <div class="select-row">
-        <select
-          class="model-select"
-          value={selectedId('siglip')}
-          onchange={(e) => handleModelChange('siglip', (e.target as HTMLSelectElement).value)}
-        >
-          {#each catalog.siglip as entry}
-            <option value={entry.id}>{entry.label} · {entry.size_label}</option>
-          {/each}
-        </select>
-        {#if !isDownloadingType('siglip')}
-          {#if activeCachedForType('siglip')}
-            <span class="cached-badge">● Cached</span>
-          {:else}
-            <span class="uncached-badge">○ Not cached</span>
-          {/if}
-        {/if}
-      </div>
-      {#if isDownloadingType('siglip')}
-        <div class="progress-box">
-          <div class="progress-header">
-            <span>Downloading…</span>
-            <span class="progress-pct">{formatBytes(progress!.downloaded_bytes)} / {formatBytes(progress!.total_bytes)}</span>
-          </div>
-          <div class="progress-track"><div class="progress-fill" style="width:{downloadPct()}%"></div></div>
-        </div>
-      {/if}
+      <ModelDropdown
+        type="siglip"
+        catalog={catalog}
+        selectedId={selectedId('siglip')}
+        progress={progress}
+        onchange={(id) => handleModelChange('siglip', id)}
+      />
     </section>
 
     <!-- Search model -->
     <section class="model-section">
       <div class="model-label">Search model</div>
       <p class="model-desc">Understands your search phrases and matches them to moments in your videos.</p>
-      <div class="select-row">
-        <select
-          class="model-select"
-          value={selectedId('text_embedder')}
-          onchange={(e) => handleModelChange('text_embedder', (e.target as HTMLSelectElement).value)}
-        >
-          {#each catalog.text_embedder as entry}
-            <option value={entry.id}>{entry.label} · {entry.size_label}</option>
-          {/each}
-        </select>
-        {#if !isDownloadingType('text_embedder')}
-          {#if activeCachedForType('text_embedder')}
-            <span class="cached-badge">● Cached</span>
-          {:else}
-            <span class="uncached-badge">○ Not cached</span>
-          {/if}
-        {/if}
-      </div>
-      {#if isDownloadingType('text_embedder')}
-        <div class="progress-box">
-          <div class="progress-header">
-            <span>Downloading…</span>
-            <span class="progress-pct">{formatBytes(progress!.downloaded_bytes)} / {formatBytes(progress!.total_bytes)}</span>
-          </div>
-          <div class="progress-track"><div class="progress-fill" style="width:{downloadPct()}%"></div></div>
-        </div>
-      {/if}
+      <ModelDropdown
+        type="text_embedder"
+        catalog={catalog}
+        selectedId={selectedId('text_embedder')}
+        progress={progress}
+        onchange={(id) => handleModelChange('text_embedder', id)}
+      />
     </section>
   {:else}
     <p class="loading">Loading…</p>
@@ -352,49 +272,6 @@
     color: #555;
     line-height: 1.5;
     margin-bottom: 8px;
-  }
-  .select-row { display: flex; align-items: center; gap: 10px; }
-  .model-select {
-    flex: 1;
-    background: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    border-radius: 6px;
-    padding: 8px 12px;
-    font-size: 11px;
-    color: #e0e0e0;
-    font-family: inherit;
-    outline: none;
-    cursor: pointer;
-  }
-  .model-select:focus { border-color: #4ade80; }
-  .cached-badge { font-size: 10px; color: #4ade80; white-space: nowrap; }
-  .uncached-badge { font-size: 10px; color: #555; white-space: nowrap; }
-  .progress-box {
-    background: #0f1a10;
-    border: 1px solid #4ade8033;
-    border-radius: 6px;
-    padding: 8px 12px;
-    margin-top: 6px;
-  }
-  .progress-header {
-    display: flex;
-    justify-content: space-between;
-    font-size: 9px;
-    color: #888;
-    margin-bottom: 5px;
-  }
-  .progress-pct { color: #4ade80; }
-  .progress-track {
-    background: #1a2a1a;
-    border-radius: 2px;
-    height: 3px;
-    overflow: hidden;
-  }
-  .progress-fill {
-    background: #4ade80;
-    height: 3px;
-    border-radius: 2px;
-    transition: width 0.4s ease;
   }
   .loading { font-size: 11px; color: #555; }
   .advanced {
