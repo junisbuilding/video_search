@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ModelCatalogResponse, DownloadProgress } from '$lib/types';
+  import type { ModelCatalogResponse, DownloadProgress, ModelCatalogEntry } from '$lib/types';
 
   let { type, catalog, selectedId, progress, onchange }: {
     type: 'vision' | 'siglip' | 'text_embedder';
@@ -33,7 +33,7 @@
     return progress?.active && progress?.model_type === type;
   }
 
-  function getBadge(entry: any) {
+  function getBadge(entry: ModelCatalogEntry) {
     if (entry.cached) return { text: 'Cached', color: '#4ade80' };
     if (isDownloading() && entry.id === selectedId) return { text: 'Downloading', color: '#3b82f6' };
     return { text: 'Not cached', color: '#555' };
@@ -43,8 +43,8 @@
 <div class="dropdown">
   <div class="dropdown-trigger" onclick={toggleDropdown}>
     {#if getSelectedEntry()}
-      <span class="selected-label">{getSelectedEntry().label}</span>
-      <span class="selected-size">{getSelectedEntry().size_label}</span>
+      <span class="selected-label">{getSelectedEntry()?.label || 'Select model'}</span>
+      <span class="selected-size">{getSelectedEntry()?.size_label || ''}</span>
     {:else}
       <span class="selected-label">Select model</span>
     {/if}
