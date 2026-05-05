@@ -81,7 +81,7 @@
 <svelte:body on:click={handleClickOutside} />
 
 <div class="dropdown" bind:this={dropdownElement}>
-  <div class="dropdown-trigger" onclick={toggleDropdown} onkeydown={handleKeyDown} tabindex="0">
+  <div class="dropdown-trigger" onclick={toggleDropdown} onkeydown={handleKeyDown} tabindex="0" role="button" aria-haspopup="true" aria-expanded={isOpen}>
     {#if getSelectedEntry()}
       <span class="selected-label">{getSelectedEntry()?.label || 'Select model'}</span>
       <span class="selected-size">{getSelectedEntry()?.size_label || ''}</span>
@@ -94,7 +94,7 @@
   </div>
 
   {#if isOpen}
-    <div class="dropdown-options">
+    <div class="dropdown-options" role="listbox">
       {#each getEntries() as entry, index}
         <div
           class="dropdown-option"
@@ -102,6 +102,8 @@
           onclick={() => selectOption(entry.id)}
           onkeydown={(e) => handleOptionKeyDown(e, index)}
           tabindex="0"
+          role="option"
+          aria-selected={entry.id === selectedId}
         >
           <span class="option-label">{entry.label}</span>
           <span class="option-size">{entry.size_label}</span>
