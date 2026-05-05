@@ -61,9 +61,11 @@ describe('Settings page', () => {
     await waitFor(() => expect(screen.getByText('Search model')).toBeInTheDocument());
   });
 
-  it('shows cached indicator for cached model', async () => {
+  it('shows ModelDropdown components for all model types', async () => {
     render(Page);
-    await waitFor(() => expect(screen.getAllByText(/Cached/i).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/Vision model/i).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/Image understanding/i).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/Search model/i).length).toBeGreaterThan(0));
   });
 
   it('shows Advanced options accordion', async () => {
