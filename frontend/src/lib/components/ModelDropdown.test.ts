@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/svelte';
+import { describe, it, expect } from 'vitest';
 import ModelDropdown from './ModelDropdown.svelte';
 
 describe('ModelDropdown', () => {
@@ -85,7 +86,7 @@ describe('ModelDropdown', () => {
       }
     });
 
-    const trigger = container.querySelector('.dropdown-trigger');
+    const trigger = container.querySelector('.dropdown-trigger') as HTMLElement;
     trigger?.click();
 
     await new Promise(resolve => setTimeout(resolve, 0));
@@ -119,7 +120,7 @@ describe('ModelDropdown', () => {
         catalog,
         selectedId,
         progress: null,
-        onchange: (id) => { selectedId = id; }
+        onchange: (id: string) => { selectedId = id; }
       }
     });
 
@@ -158,7 +159,8 @@ describe('ModelDropdown', () => {
       model_id: 'model1',
       downloaded_bytes: 0,
       total_bytes: 1000000000,
-      error: 'Download failed: network error'
+      error: 'Download failed: network error',
+      complete: false
     };
     const { container } = render(ModelDropdown, {
       props: {
@@ -170,7 +172,7 @@ describe('ModelDropdown', () => {
       }
     });
 
-    const trigger = container.querySelector('.dropdown-trigger');
+    const trigger = container.querySelector('.dropdown-trigger') as HTMLElement;
     trigger?.click();
 
     await new Promise(resolve => setTimeout(resolve, 0));
